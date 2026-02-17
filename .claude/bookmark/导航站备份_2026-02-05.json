@@ -1,0 +1,179 @@
+{
+  "groups": [
+    {
+      "id": 4,
+      "name": "个人网站",
+      "order_num": 0
+    },
+    {
+      "id": 1,
+      "name": "大模型网站",
+      "order_num": 1
+    },
+    {
+      "id": 3,
+      "name": "互联网白嫖",
+      "order_num": 2
+    },
+    {
+      "id": 5,
+      "name": "工具产品",
+      "order_num": 3
+    },
+    {
+      "id": 6,
+      "name": "Google",
+      "order_num": 4
+    },
+    {
+      "id": 7,
+      "name": "视频网站",
+      "order_num": 5
+    }
+  ],
+  "sites": [
+    {
+      "id": 6,
+      "group_id": 1,
+      "name": "gemini",
+      "url": "https://gemini.google.com/",
+      "icon": "https://www.faviconextractor.com/favicon/gemini.google.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 0,
+      "is_public": 1,
+      "created_at": "2026-02-03 15:51:01",
+      "updated_at": "2026-02-04 10:22:33"
+    },
+    {
+      "id": 9,
+      "group_id": 1,
+      "name": "chatgpt",
+      "url": "https://chat.openai.com/",
+      "icon": "https://www.faviconextractor.com/favicon/chat.openai.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 1,
+      "is_public": 1,
+      "created_at": "2026-02-04 05:46:39",
+      "updated_at": "2026-02-04 10:22:33"
+    },
+    {
+      "id": 8,
+      "group_id": 1,
+      "name": "deepseek",
+      "url": "https://chat.deepseek.com/",
+      "icon": "https://www.faviconextractor.com/favicon/chat.deepseek.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 2,
+      "is_public": 1,
+      "created_at": "2026-02-04 05:45:24",
+      "updated_at": "2026-02-04 10:22:33"
+    },
+    {
+      "id": 2,
+      "group_id": 3,
+      "name": "cloudflare",
+      "url": "https://www.cloudflare.com/",
+      "icon": "https://www.faviconextractor.com/favicon/www.cloudflare.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 0,
+      "is_public": 1,
+      "created_at": "2026-02-03 14:00:42",
+      "updated_at": "2026-02-03 14:00:42"
+    },
+    {
+      "id": 3,
+      "group_id": 3,
+      "name": "github",
+      "url": "https://github.com/zhumengstar/",
+      "icon": "https://www.faviconextractor.com/favicon/github.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 1,
+      "is_public": 1,
+      "created_at": "2026-02-03 15:05:16",
+      "updated_at": "2026-02-03 15:05:16"
+    },
+    {
+      "id": 10,
+      "group_id": 3,
+      "name": "google cloud",
+      "url": "https://console.cloud.google.com",
+      "icon": "https://www.faviconextractor.com/favicon/console.cloud.google.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 2,
+      "is_public": 1,
+      "created_at": "2026-02-04 05:47:13",
+      "updated_at": "2026-02-04 05:47:13"
+    },
+    {
+      "id": 11,
+      "group_id": 5,
+      "name": "draw",
+      "url": "https://app.diagrams.net/",
+      "icon": "https://www.faviconextractor.com/favicon/app.diagrams.net?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 0,
+      "is_public": 1,
+      "created_at": "2026-02-04 10:20:11",
+      "updated_at": "2026-02-04 10:20:11"
+    },
+    {
+      "id": 12,
+      "group_id": 5,
+      "name": "notebooklm",
+      "url": "https://notebooklm.google.com/",
+      "icon": "https://www.faviconextractor.com/favicon/notebooklm.google.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 1,
+      "is_public": 1,
+      "created_at": "2026-02-04 10:21:18",
+      "updated_at": "2026-02-04 10:21:33"
+    },
+    {
+      "id": 13,
+      "group_id": 6,
+      "name": "tasks",
+      "url": "https://tasks.google.com/",
+      "icon": "https://www.faviconextractor.com/favicon/tasks.google.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 0,
+      "is_public": 1,
+      "created_at": "2026-02-04 10:24:28",
+      "updated_at": "2026-02-04 10:24:28"
+    },
+    {
+      "id": 14,
+      "group_id": 7,
+      "name": "youtube",
+      "url": "https://www.youtube.com/",
+      "icon": "https://www.faviconextractor.com/favicon/www.youtube.com?larger=true",
+      "description": "",
+      "notes": "",
+      "order_num": 0,
+      "is_public": 1,
+      "created_at": "2026-02-04 12:44:45",
+      "updated_at": "2026-02-04 12:44:45"
+    }
+  ],
+  "configs": {
+    "site.title": "导航站",
+    "site.name": "导航站",
+    "site.customCss": "",
+    "site.backgroundImage": "",
+    "site.backgroundOpacity": "0.15",
+    "site.iconApi": "https://www.faviconextractor.com/favicon/{domain}?larger=true",
+    "site.searchBoxEnabled": "true",
+    "site.searchBoxGuestEnabled": "true",
+    "DB_INITIALIZED": "true"
+  },
+  "version": "1.0",
+  "exportDate": "2026-02-05T00:54:51.770Z"
+}

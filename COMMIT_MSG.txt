@@ -1,0 +1,42 @@
+feat(release): NavTools v1.1.0 - Enterprise-grade Navigation System
+
+This commit consolidates the entire project history into a single release version, marking the complete transition to "NavTools".
+
+Project Overview:
+NavTools is a modern, secure, and lightweight website navigation management system built on Cloudflare Workers and React 19.
+
+Key Changes & Features:
+
+1. 🚀 Core Architecture
+   - **Runtime**: Cloudflare Workers (Edge Computing)
+   - **Database**: Cloudflare D1 (SQLite) with prepared statements
+   - **Frontend**: React 19 + TypeScript + Vite 6
+   - **UI/UX**: Material UI 7 + Tailwind CSS 4
+
+2. ✨ Feature Set
+   - **Smart Grouping**: Nested organization with Emoji icons
+   - **Drag & Drop**: Intuitive sorting for sites and groups
+   - **Guest Mode**: Granular public/private visibility controls
+   - **Data Management**: JSON-based import/export functionality
+   - **Customization**: Support for custom CSS and themes (Dark/Light)
+
+3. 🔒 Security Hardening
+   - **Authentication**: JWT-based stateless auth with bcrypt hashing
+   - **Protection**: Rate limiting, localized input sanitization, and parameterized queries
+   - **Headers**: Strict security headers (HSTS, CSP, X-Frame-Options)
+
+4. 📖 Documentation (Revised)
+   - Consolidated documentation structure in `docs/`
+   - Added comprehensive guides: Deployment, Architecture, API, Security
+   - Restored and updated Docker deployment support
+
+5. 🔧 Infrastructure
+   - Optimized `wrangler.jsonc` configuration
+   - Added support for external AI providers (OpenAI compatible)
+   - Integrated "Thinking Process" UI for AI chat interactions
+
+6. 🏷️ Branding
+   - Globally renamed from "NaviHive" to "NavTools"
+   - Updated logos, metadata, and user-facing text
+
+This squash commit supersedes all previous development history.

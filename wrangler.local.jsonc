@@ -1,0 +1,29 @@
+/**
+ * 本地开发环境的 Wrangler 配置
+ * 用于 macOS 11.7.10 本地部署
+ */
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "mynav-local",
+    "main": "worker/index.ts",
+    "compatibility_date": "2025-04-05",
+    "compatibility_flags": ["nodejs_compat"],
+    "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application"
+    },
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "mynav-local",
+            "database_id": "local-db"
+        }
+    ],
+    "vars": {
+        "AUTH_ENABLED": "true",
+        "AUTH_REQUIRED_FOR_READ": "false",
+        "AUTH_USERNAME": "admin",
+        "AUTH_PASSWORD": "$2y$10$vumnTIayAfQ1im0p2BrBI.u1qHPGb0L7AINytmRTFzctFwaUouHXa",
+        "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[("
+    }
+}
