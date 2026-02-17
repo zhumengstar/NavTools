@@ -16,8 +16,8 @@ Docker 部署目前处于实验阶段，可能不支持 Cloudflare 的某些特�
 ### 1. 获取代码
 
 ```bash
-git clone https://github.com/zqq-nuli/Cloudflare-Navihive.git
-cd Cloudflare-Navihive
+git clone https://github.com/zhumengstar/NavTools.git
+cd NavTools
 ```
 
 ### 2. 构建镜像

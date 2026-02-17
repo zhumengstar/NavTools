@@ -14,7 +14,7 @@ hero:
       link: /introduction
     - theme: alt
       text: 在线演示
-      link: https://navihive.chatbot.cab/
+      link: https://navtools.chatbot.cab/
     - theme: alt
       text: 常见问题
       link: /guide/faq
@@ -113,7 +113,7 @@ features:
   <p>访问我们的演示站点，体验所有功能</p>
   <div style="margin-top: 16px;">
     <strong>演示地址：</strong><br/>
-    <a href="https://navihive.chatbot.cab/" target="_blank" style="color: var(--vp-c-brand-1);">navihive.chatbot.cab</a>
+    <a href="https://navtools.chatbot.cab/" target="_blank" style="color: var(--vp-c-brand-1);">navtools.chatbot.cab</a>
   </div>
   <div style="margin-top: 12px; padding: 12px; background: var(--vp-c-bg-soft); border-radius: 6px; font-size: 14px;">
     <div><strong>账号：</strong>admin</div>
@@ -184,8 +184,8 @@ NavTools 采用现代化的全栈技术：
 
 <div style="text-align: center; margin-top: 64px; margin-bottom: 32px;">
 
-Made with ❤️ by [zqq-nuli](https://github.com/zqq-nuli)
+Made with ❤️ by [zhumengstar](https://github.com/zhumengstar)
 
-[⭐ GitHub Star](https://github.com/zqq-nuli/Cloudflare-Navihive) · [📝 提交问题](https://github.com/zqq-nuli/Cloudflare-Navihive/issues) · [🤝 参与贡献](https://github.com/zqq-nuli/Cloudflare-Navihive/pulls) · [📖 查看文档](/introduction)
+[⭐ GitHub Star](https://github.com/zhumengstar/NavTools) · [📝 提交问题](https://github.com/zhumengstar/NavTools/issues) · [🤝 参与贡献](https://github.com/zhumengstar/NavTools/pulls) · [📖 查看文档](/introduction)
 
 </div>

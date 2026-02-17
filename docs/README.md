@@ -11,7 +11,7 @@ pnpm install
 # 启动开发服务器
 pnpm docs:dev
 
-# 访问 http://localhost:5174/Cloudflare-Navihive/
+# 访问 http://localhost:5174/NavTools/
 ```
 
 ## 构建和预览
@@ -23,7 +23,7 @@ pnpm docs:build
 # 预览构建结果
 pnpm docs:preview
 
-# 访问 http://localhost:4173/Cloudflare-Navihive/
+# 访问 http://localhost:4173/NavTools/
 ```
 
 ## 部署

@@ -20,7 +20,7 @@ Cloudflare Workers 提供了极其简单的自定义域名绑定功能。
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)。
 2. 在左侧菜单点击 **Workers & Pages**。
-3. 在列表中找到您部署的 NavTools 项目（例如 `navihive`），点击进入。
+3. 在列表中找到您部署的 NavTools 项目（例如 `navtools`），点击进入。
 4. 点击顶部的 **Settings**（设置）标签页。
 5. 在左侧子菜单点击 **Domains & Routes**（域名与路由）。
 

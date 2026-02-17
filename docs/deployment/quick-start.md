@@ -15,8 +15,8 @@
 克隆 NavTools 仓库到本地：
 
 ```bash
-git clone https://github.com/zqq-nuli/Cloudflare-Navihive.git
-cd Cloudflare-Navihive
+git clone https://github.com/zhumengstar/NavTools.git
+cd NavTools
 ```
 
 安装依赖：

@@ -62,7 +62,7 @@ NavTools 是一个**现代化的个人导航站管理系统**，基于 Cloudflar
 
 ### 在线演示
 
-访问我们的演示站点：[navihive.chatbot.cab](https://navihive.chatbot.cab/)
+访问我们的演示站点：[navtools.chatbot.cab](https://navtools.chatbot.cab/)
 
 ```
 演示账号：admin
@@ -207,10 +207,10 @@ NavTools 是一个**现代化的个人导航站管理系统**，基于 Cloudflar
 ## 社区与支持
 
 - 📖 [项目介绍](/introduction)
-- 💬 [GitHub Issues](https://github.com/zqq-nuli/Cloudflare-Navihive/issues) - 提问和反馈
-- 🐛 [报告 Bug](https://github.com/zqq-nuli/Cloudflare-Navihive/issues/new)
+- 💬 [GitHub Issues](https://github.com/zhumengstar/NavTools/issues) - 提问和反馈
+- 🐛 [报告 Bug](https://github.com/zhumengstar/NavTools/issues/new)
 - 🤝 [参与贡献](/contributing/)
-- ⭐ [GitHub Star](https://github.com/zqq-nuli/Cloudflare-Navihive)
+- ⭐ [GitHub Star](https://github.com/zhumengstar/NavTools)
 
 ---
 

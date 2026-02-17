@@ -1,163 +1,95 @@
 <div align="center">
 
-<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M60 10L105 35V85L60 110L15 85V35L60 10Z" fill="url(#paint0_linear)" stroke="#2D6CDF" stroke-width="2"/>
-  <path d="M60 30L80 40V75L60 85L40 75V40L60 30Z" fill="white" stroke="#2D6CDF" stroke-width="2"/>
-  <circle cx="60" cy="57" r="10" fill="#2D6CDF"/>
-  <path d="M60 43V57L68 65" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <defs>
-    <linearGradient id="paint0_linear" x1="15" y1="60" x2="105" y2="60" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#61DAFB"/>
-      <stop offset="1" stop-color="#2D6CDF"/>
-    </linearGradient>
-  </defs>
-</svg>
+<img src="public/favicon.png" width="120" height="120" alt="NavTools Logo">
 
-# NavTools - 现代化个人导航站
+# NavTools
 
-![NavTools 导航站](https://img.shields.io/badge/NavTools-导航站-blue)
-![React](https://img.shields.io/badge/React-19.0.0-61dafb)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6)
-![Material UI](https://img.shields.io/badge/Material_UI-7.0-0081cb)
-![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers-f38020)
-![License](https://img.shields.io/badge/License-MIT-green)
+**现代化个人导航站管理系统**
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zhumengstar/Cloudflare-Navihive)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zhumengstar/NavTools)
 
-**一个优雅、现代化的网站导航管理系统**
-基于 Cloudflare Workers 构建 • 零成本部署 • 全球 CDN 加速 • 企业级安全
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-orange)
+![React](https://img.shields.io/badge/React-19-61dafb)
 
-[📖 完整文档](https://zqq-nuli.github.io/Cloudflare-Navihive/) • [🎮 在线演示](https://navihive.chatbot.cab/) • [🚀 快速开始](https://zqq-nuli.github.io/Cloudflare-Navihive/deployment/) • [💬 问题反馈](https://github.com/zqq-nuli/Cloudflare-Navihive/issues)
+**零成本部署 • 全球 CDN 加速 • 企业级安全**
+
+[🎮 在线演示](https://navtools.chatbot.cab/) • [� 完整文档](https://zhumengstar.github.io/NavTools/) • [💬 问题反馈](https://github.com/zhumengstar/NavTools/issues)
 
 </div>
 
-> 部署过程中遇到问题，暂时可参阅 V1.1.0版本[部署教程](https://github.com/zqq-nuli/Cloudflare-Navihive/tree/v1.1.0)暂时我可能没有那么多时间来修正文档的问题，实在抱歉。
+---
 
-## 🎯 快速开始
+## 🚀 简介
 
-### 在线演示
+**NavTools** 是一个基于 Cloudflare Workers 构建的现代化导航站。它无需服务器，无需域名（可选），即可为你提供一个高性能、安全且易于管理的个人或团队导航主页。
 
-访问演示站点体验所有功能：[navihive.chatbot.cab](https://navihive.chatbot.cab/)
+### ✨ 核心特性
 
+- **零成本**: 基于 Cloudflare 免费套餐，永久免费。
+- **高性能**: 全球边缘部署，秒开体验。
+- **高安全**: 内置 JWT 认证、防暴力破解、XSS/SQL 注入防护。
+- **现代化**: Material UI 7 + Tailwind CSS 4 设计，支持深色模式。
+- **易管理**: 支持拖拽排序、分组管理、访客模式（公开/私有分离）。
+
+---
+
+## 🛠️ 快速部署
+
+我们强烈推荐使用 **Cloudflare Workers** 进行一键部署，只需 5 分钟。
+
+### 方式一：一键部署（推荐）
+
+1. 点击上方的 **Deploy to Cloudflare Workers** 按钮。
+2. 按照引导完成 Fork 和部署流程。
+3. 部署完成后，在 Cloudflare 后台绑定 D1 数据库。
+
+### 方式二：手动部署
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/zhumengstar/NavTools.git
+cd NavTools
+
+# 2. 安装依赖
+pnpm install
+
+# 3. 创建数据库
+npx wrangler d1 create navigation-db
+
+# 4. 配置 wrangler.jsonc (填入 database_id 和认证信息)
+cp wrangler.template.jsonc wrangler.jsonc
+
+# 5. 初始化数据库表结构
+npx wrangler d1 execute navigation-db --file=init_table.sql
+
+# 6. 部署
+pnpm run deploy
 ```
-👤 演示账号：admin
-🔑 演示密码：NavTools2025!
-```
 
-### 立即部署
-
-**5 分钟完成部署，零成本永久使用：**
-
-1. **Fork 项目** → 点击右上角 Fork 按钮
-2. **新建 wrangler.jsonc 文件** 从 wrangler.template.jsonc 复制然后修改
-3. **一键部署** → [![Deploy](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zhumengstar/Cloudflare-Navihive)
-4. **配置数据库** → 按照[部署指南](https://zqq-nuli.github.io/Cloudflare-Navihive/deployment/)创建 D1 数据库
-
-> 详细步骤见[完整部署指南](https://zqq-nuli.github.io/Cloudflare-Navihive/deployment/)
+> 详细教程请参阅 [部署指南](https://zhumengstar.github.io/NavTools/deployment/)。
 
 ---
 
-## 📖 完整文档
+## 📚 文档资源
 
-### 📚 用户指南
-- [**项目介绍**](https://zqq-nuli.github.io/Cloudflare-Navihive/introduction) - 了解 NavTools 的特点和优势
-- [**为什么选择 NavTools**](https://zqq-nuli.github.io/Cloudflare-Navihive/guide/why-navihive) - 与其他方案的对比
-- [**功能截图**](https://zqq-nuli.github.io/Cloudflare-Navihive/guide/screenshots) - 11 张精美功能截图展示
-- [**常见问题**](https://zqq-nuli.github.io/Cloudflare-Navihive/guide/faq) - FAQ 和故障排除
-- [**更新日志**](https://zqq-nuli.github.io/Cloudflare-Navihive/guide/changelog) - 版本历史和变更记录
-
-### 🔧 开发者文档
-- [**部署指南**](https://zqq-nuli.github.io/Cloudflare-Navihive/deployment/) - 详细的部署步骤
-- [**架构设计**](https://zqq-nuli.github.io/Cloudflare-Navihive/architecture/) - 技术栈和系统架构
-- [**API 文档**](https://zqq-nuli.github.io/Cloudflare-Navihive/api/) - RESTful API 参考
-- [**安全指南**](https://zqq-nuli.github.io/Cloudflare-Navihive/security/) - 14+ 安全加固说明
-- [**贡献指南**](https://zqq-nuli.github.io/Cloudflare-Navihive/contributing/) - 如何参与项目
-
-### 🎯 功能特性
-- [**功能概览**](https://zqq-nuli.github.io/Cloudflare-Navihive/features/) - 完整功能列表和说明
-
-> 📝 访问 [NavTools 文档站点](https://zqq-nuli.github.io/Cloudflare-Navihive/) 查看完整文档
+- [**用户指南**](https://zhumengstar.github.io/NavTools/introduction): 了解如何使用 NavTools。
+- [**部署文档**](https://zhumengstar.github.io/NavTools/deployment/): 详细的安装和配置说明。
+- [**常见问题**](https://zhumengstar.github.io/NavTools/guide/faq): 遇到问题先看这里。
+- [**API 文档**](https://zhumengstar.github.io/NavTools/api/): 开发者参考手册。
 
 ---
 
-## 🛠️ 技术栈
+## 🧩 技术栈
 
-**前端**: React 19 • TypeScript 5.7 • Material UI 7.0 • Tailwind CSS 4.1 • DND Kit • Vite 6
-
-**后端**: Cloudflare Workers • Cloudflare D1 (SQLite) • JWT + bcrypt • TypeScript Strict Mode
-
-**开发**: pnpm • Wrangler CLI • ESLint + Prettier
-
-## 🤝 贡献
-
-欢迎所有形式的贡献！查看 [贡献指南](https://zqq-nuli.github.io/Cloudflare-Navihive/contributing/) 了解如何参与项目。
+- **前端**: React 19, Material UI 7, Tailwind CSS 4, Vite 6, DND Kit
+- **后端**: Cloudflare Workers, Hono (Like), TypeScript
+- **数据库**: Cloudflare D1 (SQLite)
+- **工具链**: Biome/ESLint, Prettier, Wrangler
 
 ---
 
-## 📄 许可证
-
-本项目基于 [MIT License](LICENSE) 开源协议发布。
-
----
-
-## 🙏 致谢
-
-感谢以下开源项目和服务：
-
-- [React](https://reactjs.org/) • [TypeScript](https://www.typescriptlang.org/) • [Vite](https://vitejs.dev/)
-- [Material UI](https://mui.com/) • [DND Kit](https://dndkit.com/) • [Tailwind CSS](https://tailwindcss.com/)
-- [Cloudflare Workers](https://workers.cloudflare.com/) • [Cloudflare D1](https://developers.cloudflare.com/d1/)
-- [Claude Code](https://claude.ai/code) • [Cursor](https://www.cursor.com)
-
-感谢所有提交 Issue、PR 和 Star 的开发者们！🌟
-
----
-
-## ⭐ 支持项目
-
-如果 NavTools 对你有帮助，欢迎通过以下方式支持：
-
-### 💝 给项目点赞
-- 点击右上角的 ⭐ **Star** 按钮，这是对开发者最大的鼓励
-- **Fork** 项目，参与改进和定制
-- 分享给你的朋友和同事
-
-### 💰 赞赏支持
-你的赞赏将用于项目的持续开发和维护：
-
-<div align="center">
-  <img src="https://img.zhengmi.org/file/1743956440128_4b965550184c06d8164f8077fa42b5d.jpg" alt="微信赞赏码" width="300">
-  <p><em>微信扫码赞赏</em></p>
-</div>
-
-### 🤝 其他支持方式
-- 💬 提交有价值的 Issue 和 Feature Request
-- 📝 改进文档和教程
-- 🐛 报告 Bug 并提供复现步骤
-- 💻 贡献代码（欢迎提交 PR）
-
----
-
-## 📈 Star History
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zqq-nuli/Cloudflare-Navihive&type=Date&theme=dark" />
-  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zqq-nuli/Cloudflare-Navihive&type=Date" />
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=zqq-nuli/Cloudflare-Navihive&type=Date" />
-</picture>
-
----
-
-<div align="center">
-
-## 🎉 让导航管理更简单
-
-**NavTools** - 你的专属网络导航中心
-
-[立即部署](https://deploy.workers.cloudflare.com/?url=https://github.com/zqq-nuli/Cloudflare-Navihive) • [在线演示](https://navihive.chatbot.cab/) • [完整文档](https://zqq-nuli.github.io/Cloudflare-Navihive/) • [提交问题](https://github.com/zqq-nuli/Cloudflare-Navihive/issues)
-
-Made with ❤️ by [zqq-nuli](https://github.com/zqq-nuli)
-
-⭐ 如果觉得有用，别忘了点个 Star 哦 ⭐
+**NavTools** © 2026 [zhumengstar](https://github.com/zhumengstar). Released under the MIT License.
 
 </div>

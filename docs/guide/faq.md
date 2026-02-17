@@ -427,7 +427,7 @@ pnpm --version
 如果您的问题未在此列出：
 
 - **查看文档**：浏览左侧菜单中的其他文档页面
-- **搜索 Issues**：在 [GitHub Issues](https://github.com/zqq-nuli/Cloudflare-Navihive/issues) 中搜索类似问题
+- **搜索 Issues**：在 [GitHub Issues](https://github.com/zhumengstar/NavTools/issues) 中搜索类似问题
 - **提交 Issue**：描述问题、环境信息、错误日志，我们会尽快回复
 - **加入社区**：在 GitHub Discussions 中与其他用户交流
 

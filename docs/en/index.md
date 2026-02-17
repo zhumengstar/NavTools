@@ -14,10 +14,10 @@ hero:
       link: /en/guide/getting-started
     - theme: alt
       text: Live Demo
-      link: https://navihive.chatbot.cab/
+      link: https://navtools.chatbot.cab/
     - theme: alt
       text: GitHub
-      link: https://github.com/zqq-nuli/Cloudflare-Navihive
+      link: https://github.com/zhumengstar/NavTools
 
 features:
   - icon: 📚
@@ -63,8 +63,8 @@ features:
 
 ```bash [Developer]
 # Clone the project
-git clone https://github.com/zqq-nuli/Cloudflare-Navihive.git
-cd Cloudflare-Navihive
+git clone https://github.com/zhumengstar/NavTools.git
+cd NavTools
 
 # Install dependencies
 pnpm install
@@ -83,7 +83,7 @@ pnpm deploy
 
 ## Version Info
 
-Current Version: **v1.1.0** | [Changelog](/en/guide/migration) | [GitHub Release](https://github.com/zqq-nuli/Cloudflare-Navihive/releases)
+Current Version: **v1.1.0** | [Changelog](/en/guide/migration) | [GitHub Release](https://github.com/zhumengstar/NavTools/releases)
 
 ### v1.1.0 New Features
 
@@ -95,8 +95,8 @@ Current Version: **v1.1.0** | [Changelog](/en/guide/migration) | [GitHub Release
 
 <div style="text-align: center; margin-top: 48px;">
 
-Made with ❤️ by [zqq-nuli](https://github.com/zqq-nuli)
+Made with ❤️ by [zhumengstar](https://github.com/zhumengstar)
 
-[⭐ Star the Project](https://github.com/zqq-nuli/Cloudflare-Navihive) · [📝 Submit Issues](https://github.com/zqq-nuli/Cloudflare-Navihive/issues) · [🤝 Contribute](https://github.com/zqq-nuli/Cloudflare-Navihive/pulls)
+[⭐ Star the Project](https://github.com/zhumengstar/NavTools) · [📝 Submit Issues](https://github.com/zhumengstar/NavTools/issues) · [🤝 Contribute](https://github.com/zhumengstar/NavTools/pulls)
 
 </div>

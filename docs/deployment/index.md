@@ -128,10 +128,10 @@ pnpm --version
 
 ```bash
 # 克隆仓库
-git clone https://github.com/zqq-nuli/Cloudflare-Navihive.git
+git clone https://github.com/zhumengstar/NavTools.git
 
 # 进入项目目录
-cd Cloudflare-Navihive
+cd NavTools
 
 # 安装依赖
 pnpm install
@@ -385,7 +385,7 @@ wrangler rollback --message "Rollback to stable version"
 
 - 查看 [常见问题](/guide/faq)
 - 查看 [故障排查](/deployment/troubleshooting)
-- 在 [GitHub Issues](https://github.com/zqq-nuli/Cloudflare-Navihive/issues) 提问
-- 加入 [GitHub Discussions](https://github.com/zqq-nuli/Cloudflare-Navihive/discussions) 讨论
+- 在 [GitHub Issues](https://github.com/zhumengstar/NavTools/issues) 提问
+- 加入 [GitHub Discussions](https://github.com/zhumengstar/NavTools/discussions) 讨论
 
 我们随时准备帮助您！

@@ -265,6 +265,13 @@ function App() {
   const [openConfig, setOpenConfig] = useState(false);
   const [tempConfigs, setTempConfigs] = useState<Record<string, string>>(DEFAULT_CONFIGS);
 
+  // Ensure document title updates with config
+  useEffect(() => {
+    if (configs['site.title']) {
+      document.title = configs['site.title'];
+    }
+  }, [configs]);
+
   // Create Material UI Theme
   const uiStyle = configs['ui.style'] || 'modern';
 
@@ -2621,7 +2628,7 @@ function App() {
                   {/* GitHub 图标 */}
                   <IconButton
                     component='a'
-                    href='https://github.com/zqq-nuli/Navihive'
+                    href='https://github.com/zhumengstar/NavTools'
                     target='_blank'
                     rel='noopener noreferrer'
                     sx={{
