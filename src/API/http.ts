@@ -1801,53 +1801,7 @@ export class NavigationAPI {
     }
   }
 
-  /**
-   * 批量更新所有站点的图标为统一 API 格式
-   * 格式: https://www.faviconextractor.com/favicon/{domain}
-   */
-  async batchUpdateIcons(userId?: number): Promise<{ success: boolean; count: number }> {
-    try {
-      // 1. 获取该用户的所有站点 (已包含 userId 过滤)
-      const sites = await this.getSites(undefined, userId);
-      const stmts: D1PreparedStatement[] = [];
 
-      // 提取域名的简单逻辑
-      const getDomain = (url: string) => {
-        try {
-          const match = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:/\n?]+)/im);
-          return match && match[1] ? match[1] : null;
-        } catch {
-          return null;
-        }
-      };
-
-      // 2. 准备批量更新语句
-      for (const site of sites) {
-        if (site.id && site.url) {
-          const domain = getDomain(site.url);
-          if (domain) {
-            const newIcon = `https://www.faviconextractor.com/favicon/${domain}`;
-            if (site.icon !== newIcon) {
-              stmts.push(
-                this.db
-                  .prepare('UPDATE sites SET icon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-                  .bind(newIcon, site.id)
-              );
-            }
-          }
-        }
-      }
-
-      if (stmts.length > 0) {
-        await this.db.batch(stmts);
-      }
-
-      return { success: true, count: stmts.length };
-    } catch (error) {
-      console.error('批量更新图标失败:', error);
-      return { success: false, count: 0 };
-    }
-  }
 
   /**
    * 根据 URL 自动生成图标链接

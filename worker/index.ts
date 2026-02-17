@@ -1470,12 +1470,7 @@ export default {
                         } catch (e) {
                             return createJsonResponse({ success: false, message: `抓取失败: ${e instanceof Error ? e.message : '未知错误'}` }, request, { status: 500 });
                         }
-                    } else if (path === "utils/batch-update-icons" && method === "POST") {
-                        if (!isAuthenticated || !currentUserId) {
-                            return createJsonResponse({ success: false, message: "请先登录" }, request, { status: 401 });
-                        }
-                        const result = await api.batchUpdateIcons(currentUserId);
-                        return createJsonResponse(result, request);
+
                     } else if (path === "sites/batch" && method === "PUT") {
                         if (!isAuthenticated || !currentUserId) {
                             return createJsonResponse({ success: false, message: "请先登录" }, request, { status: 401 });

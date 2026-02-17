@@ -2360,24 +2360,7 @@ function App() {
     }
   };
 
-  // 批量更新所有站点图标
-  const handleBatchUpdateIcons = useCallback(async () => {
-    try {
-      setImportLoading(true); // 使用现有加载状态作为反馈
-      const result = await api.batchUpdateIcons();
-      if (result.success) {
-        handleSuccess(`成功更新了 ${result.count} 个站点的图标`);
-        await fetchData(); // 刷新数据
-      } else {
-        handleError('批量更新图标失败');
-      }
-    } catch (error) {
-      console.error('批量更新图标出错:', error);
-      handleError('批量更新图标出错: ' + (error as Error).message);
-    } finally {
-      setImportLoading(false);
-    }
-  }, [api, fetchData]);
+
 
   const ActiveLayout = configs['ui.style'] === 'classic' ? ClassicLayout : ModernLayout;
 
@@ -2668,7 +2651,6 @@ function App() {
                         onOpenAddGroup={handleOpenAddGroup}
                         configs={configs}
                         onUpdateConfigs={handleUpdateConfigs}
-                        onBatchUpdateIcons={handleBatchUpdateIcons}
                         onResetData={handleOpenResetData}
                         api={api}
                         avatarUrl={avatarUrl}

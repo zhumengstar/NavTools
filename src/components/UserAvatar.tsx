@@ -58,7 +58,6 @@ interface UserAvatarProps {
     onOpenAddGroup: () => void;
     configs: Record<string, string>;
     onUpdateConfigs: (newConfigs: Record<string, string>) => Promise<void>;
-    onBatchUpdateIcons: () => void;
     onResetData: () => void;
     isAdmin?: boolean;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,7 +77,6 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
     onOpenAddGroup,
     configs,
     onUpdateConfigs,
-    onBatchUpdateIcons,
     onResetData,
     isAdmin,
     api,
@@ -505,12 +503,6 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                     <ListItemText>导入数据</ListItemText>
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={() => { handleMenuClose(); onBatchUpdateIcons(); }} sx={menuItemSx}>
-                    <ListItemIcon>
-                        <AutoFixHighIcon fontSize='small' />
-                    </ListItemIcon>
-                    <ListItemText>批量更新图标</ListItemText>
-                </MenuItem>
                 <MenuItem onClick={() => { handleMenuClose(); onResetData(); }} sx={{ color: 'error.main', ...menuItemSx }}>
                     <ListItemIcon sx={{ color: 'error.main' }}>
                         <DeleteSweepIcon fontSize='small' />
