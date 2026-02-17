@@ -33,7 +33,7 @@ function HideOnScroll(props: { children: React.ReactElement }) {
     );
 }
 
-const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NaviHive" }) => {
+const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTools" }) => {
     const theme = useTheme();
 
     const glassStyle = useMemo(() => ({

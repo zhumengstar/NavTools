@@ -1359,7 +1359,7 @@ export const mockSites: Site[] = [
 ];
 
 export const mockConfigs: Record<string, string> = {
-  'site.title': 'NaviHive 导航站',
+  'site.title': 'NavTools 导航站',
   'site.name': '个人书签导航',
   'site.customCss': '',
 };

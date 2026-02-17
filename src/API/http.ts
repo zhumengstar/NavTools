@@ -665,7 +665,7 @@ export class NavigationAPI {
       // 4. 发送邮件
       const emailResult = await this.sendEmail(
         request.email,
-        'NaviHive 密码重置验证码',
+        'NavTools 密码重置验证码',
         `您的重置密码验证码是：${code}。有效期为 10 分钟。如果您没有尝试重置密码，请忽略此邮件。`,
         env
       );
