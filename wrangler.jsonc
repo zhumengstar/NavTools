@@ -15,7 +15,7 @@
         "not_found_handling": "single-page-application"
     },
     "observability": {
-        "enabled": true
+        "enabled": false
     },
     // Workers AI 绑定
     "ai": {

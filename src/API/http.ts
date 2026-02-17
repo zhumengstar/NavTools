@@ -194,28 +194,23 @@ export class NavigationAPI {
   // 修改initDB方法，将SQL语句分开执行
   async initDB(): Promise<{ success: boolean; alreadyInitialized: boolean }> {
     // 尝试自动修复缺失的字段 (即使已初始化也尝试执行，以修复旧版本数据库)
-    try {
-      await this.db.exec('ALTER TABLE groups ADD COLUMN is_public INTEGER DEFAULT 1;');
-    } catch { }
-    try {
-      await this.db.exec('ALTER TABLE sites ADD COLUMN is_public INTEGER DEFAULT 1;');
-    } catch { }
-    try {
-      await this.db.exec('CREATE INDEX IF NOT EXISTS idx_sites_is_public ON sites(is_public);');
-    } catch { }
 
-    // 迁移：sites 表添加 is_deleted 和 deleted_at 字段
-    try {
-      await this.db.exec('ALTER TABLE sites ADD COLUMN is_deleted INTEGER DEFAULT 0;');
-    } catch { }
-    try {
-      await this.db.exec('ALTER TABLE sites ADD COLUMN deleted_at TIMESTAMP;');
-    } catch { }
-    try {
-      await this.db.exec('CREATE INDEX IF NOT EXISTS idx_sites_is_deleted ON sites(is_deleted);');
-    } catch { }
 
     // 迁移：groups 表添加 user_id 字段
+    // --- 快速路径：检查是否已经完全初始化 ---
+    try {
+      const isInitialized = await this.db
+        .prepare("SELECT value FROM configs WHERE key = 'DB_INITIALIZED' AND user_id = 1")
+        .first<{ value: string }>();
+
+      if (isInitialized?.value === 'true') {
+        // console.log('[DB Init] Fast-path: Already initialized, skipping heavy migrations.');
+        return { success: true, alreadyInitialized: true };
+      }
+    } catch (e) {
+      // 报错说明表可能不存在，继续执行初始化
+    }
+
     try {
       await this.db.exec('ALTER TABLE groups ADD COLUMN user_id INTEGER DEFAULT 1;'); // 默认为 admin(1)
     } catch { }
@@ -1047,17 +1042,26 @@ export class NavigationAPI {
   }
 
   // 网站相关 API
-  async getSites(groupId?: number): Promise<Site[]> {
-    let query =
-      'SELECT id, group_id, name, url, icon, description, notes, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at FROM sites WHERE (is_deleted = 0 OR is_deleted IS NULL)';
-    const params: (string | number)[] = [];
+  async getSites(groupId?: number, userId?: number): Promise<Site[]> {
+    let query = `
+      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at 
+      FROM sites s
+    `;
+
+    if (userId !== undefined) {
+      query += ` JOIN groups g ON s.group_id = g.id WHERE g.user_id = ? AND (s.is_deleted = 0 OR s.is_deleted IS NULL)`;
+    } else {
+      query += ` WHERE (s.is_deleted = 0 OR s.is_deleted IS NULL)`;
+    }
+
+    const params: (string | number)[] = userId !== undefined ? [userId] : [];
 
     if (groupId !== undefined) {
-      query += ' AND group_id = ?';
+      query += ' AND s.group_id = ?';
       params.push(groupId);
     }
 
-    query += ' ORDER BY order_num';
+    query += ' ORDER BY s.order_num';
 
     const result = await this.db
       .prepare(query)
@@ -1261,6 +1265,8 @@ export class NavigationAPI {
       }
     }
 
+    const icon = site.icon || this.getIconFromUrl(site.url);
+
     const result = await this.db
       .prepare(
         `
@@ -1273,7 +1279,7 @@ export class NavigationAPI {
         site.group_id,
         site.name,
         site.url,
-        site.icon || '',
+        icon,
         site.description || '',
         site.notes || '',
         site.order_num,
@@ -1578,108 +1584,119 @@ export class NavigationAPI {
   // 导入所有数据
   async importData(data: ExportData, userId: number = 1): Promise<ImportResult> {
     try {
-      // 创建新旧分组ID的映射
-      const groupMap = new Map<number, number>();
+      // 1. 获取当前用户的所有现有分组和站点，用于重用或冲突检测
+      const existingGroups = await this.getGroups(userId);
+      const existingSites = await this.getSites(undefined, userId);
 
-      // 统计信息
+      const groupMap = new Map<number, number>(); // 旧ID -> 新ID
+      const groupByName = new Map<string, Group>();
+      for (const g of existingGroups) {
+        groupByName.set(g.name.trim().toLowerCase(), g);
+      }
+
+      // 站点按 分组ID+URL 映射，用于冲突检测
+      const siteByKey = new Map<string, Site>();
+      for (const s of existingSites) {
+        const key = `${s.group_id}|${s.url.trim().toLowerCase()}`;
+        siteByKey.set(key, s);
+      }
+
       const stats = {
-        groups: {
-          total: data.groups.length,
-          created: 0,
-          merged: 0,
-        },
-        sites: {
-          total: data.sites.length,
-          created: 0,
-          updated: 0,
-          skipped: 0,
-        },
+        groups: { total: data.groups.length, created: 0, merged: 0 },
+        sites: { total: data.sites.length, created: 0, updated: 0, skipped: 0 },
       };
 
-      // 导入分组数据
+      const siteStmts: D1PreparedStatement[] = [];
+      const configStmts: D1PreparedStatement[] = [];
+
+      // 第一步：处理分组
+      // 注意：由于我们需要新创建的分组 ID 来插入站点，
+      // 但 D1 batch() 不支持中间状态获取 ID。
+      // 因此，我们必须先同步创建不存在的分组。
       for (const group of data.groups) {
-        // 检查是否已存在同名分组
-        const existingGroup = await this.getGroupByName(group.name, userId);
+        const normalizedName = group.name.trim().toLowerCase();
+        const existing = groupByName.get(normalizedName);
 
-        if (existingGroup) {
-          // 如果存在同名分组，使用现有分组ID
-          if (group.id) {
-            groupMap.set(group.id, existingGroup.id as number);
-          }
-
-          // 可选：更新分组顺序（如果需要）
-          // 此处可以决定是否需要更新现有分组的order_num
-          // 如果需要，可以执行：
-          // await this.updateGroup(existingGroup.id as number, { order_num: group.order_num });
-
+        if (existing) {
+          if (group.id) groupMap.set(group.id, existing.id as number);
           stats.groups.merged++;
         } else {
-          // 如果不存在同名分组，创建新分组
+          // 同步创建分组以获取 ID（虽然牺牲了一点性能，但保证了逻辑正确性）
           const newGroup = await this.createGroup({
             name: group.name,
             order_num: group.order_num,
+            is_public: group.is_public ?? 1
           }, userId);
-
-          // 添加到映射
           if (group.id && newGroup.id) {
             groupMap.set(group.id, newGroup.id);
           }
-
           stats.groups.created++;
         }
       }
 
-      // 导入站点数据，更新分组ID
+      // 第二步：处理站点
       for (const site of data.sites) {
-        // 获取新的分组ID
         const newGroupId = groupMap.get(site.group_id);
-
-        // 如果没有映射到新ID（可能是因为分组被过滤掉），则跳过该站点
         if (!newGroupId) {
-          console.warn(`无法为站点"${site.name}"找到对应的分组ID，已跳过`);
           stats.sites.skipped++;
           continue;
         }
 
-        // 检查该分组下是否已存在相同URL的站点
-        const existingSite = await this.getSiteByGroupIdAndUrl(newGroupId, site.url);
+        const siteKey = `${newGroupId}|${site.url.trim().toLowerCase()}`;
+        const existing = siteByKey.get(siteKey);
+        const icon = site.icon || this.getIconFromUrl(site.url);
 
-        if (existingSite) {
-          // 如果存在相同URL的站点，可以选择更新或跳过
-          // 这里选择更新站点信息（名称、图标、描述等）
-          await this.updateSite(existingSite.id as number, {
-            name: site.name,
-            icon: site.icon,
-            description: site.description,
-            notes: site.notes,
-            // 不更新order_num以保持现有排序
-          });
-
+        if (existing) {
+          siteStmts.push(
+            this.db.prepare(
+              'UPDATE sites SET name = ?, icon = ?, description = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+            ).bind(site.name, icon, site.description || '', site.notes || '', existing.id)
+          );
           stats.sites.updated++;
         } else {
-          // 如果不存在相同URL的站点，创建新站点
-          await this.createSite({
-            ...site,
-            id: undefined, // 不使用旧ID
-            group_id: newGroupId,
-          });
-
+          siteStmts.push(
+            this.db.prepare(
+              'INSERT INTO sites (group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
+            ).bind(
+              newGroupId,
+              site.name,
+              site.url,
+              icon,
+              site.description || '',
+              site.notes || '',
+              site.order_num || 0,
+              site.is_public ?? 1
+            )
+          );
           stats.sites.created++;
         }
       }
 
-      // 导入配置数据
+      // 第三步：处理配置
       for (const [key, value] of Object.entries(data.configs)) {
         if (key !== 'DB_INITIALIZED' && key !== 'DATA_INITIALIZED') {
-          // 跳过系统级初始化标志
-          await this.setConfig(key, value, userId);
+          configStmts.push(
+            this.db.prepare(
+              `INSERT INTO configs (key, value, user_id, updated_at) 
+               VALUES (?, ?, ?, CURRENT_TIMESTAMP) 
+               ON CONFLICT(key, user_id) 
+               DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP`
+            ).bind(key, value, userId, value)
+          );
         }
       }
 
-      return {
-        success: true,
-        stats,
-      };
+      // 第四步：执行批量更新 (Sites + Configs)
+      const allStmts = [...siteStmts, ...configStmts];
+      if (allStmts.length > 0) {
+        // 分批执行，防止超过 D1 100 statements 的限制
+        const batchSize = 100;
+        for (let i = 0; i < allStmts.length; i += batchSize) {
+          await this.db.batch(allStmts.slice(i, i + batchSize));
+        }
+      }
+
+      return { success: true, stats };
     } catch (error) {
       console.error('导入数据失败:', error);
       return {
@@ -1790,11 +1807,11 @@ export class NavigationAPI {
    */
   async batchUpdateIcons(userId?: number): Promise<{ success: boolean; count: number }> {
     try {
-      // 1. 获取该用户的所有站点
-      const sites = await this.getSites(userId);
-      let updatedCount = 0;
+      // 1. 获取该用户的所有站点 (已包含 userId 过滤)
+      const sites = await this.getSites(undefined, userId);
+      const stmts: D1PreparedStatement[] = [];
 
-      // 提取域名的简单逻辑 (避免在 Worker 环境依赖外部库)
+      // 提取域名的简单逻辑
       const getDomain = (url: string) => {
         try {
           const match = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:/\n?]+)/im);
@@ -1804,25 +1821,44 @@ export class NavigationAPI {
         }
       };
 
-      // 2. 遍历并更新
+      // 2. 准备批量更新语句
       for (const site of sites) {
         if (site.id && site.url) {
           const domain = getDomain(site.url);
           if (domain) {
             const newIcon = `https://www.faviconextractor.com/favicon/${domain}`;
-            // 只有当图标不同时才更新
             if (site.icon !== newIcon) {
-              await this.updateSite(site.id, { icon: newIcon });
-              updatedCount++;
+              stmts.push(
+                this.db
+                  .prepare('UPDATE sites SET icon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+                  .bind(newIcon, site.id)
+              );
             }
           }
         }
       }
 
-      return { success: true, count: updatedCount };
+      if (stmts.length > 0) {
+        await this.db.batch(stmts);
+      }
+
+      return { success: true, count: stmts.length };
     } catch (error) {
       console.error('批量更新图标失败:', error);
       return { success: false, count: 0 };
+    }
+  }
+
+  /**
+   * 根据 URL 自动生成图标链接
+   */
+  private getIconFromUrl(url: string): string {
+    try {
+      const match = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:/\n?]+)/im);
+      const domain = match && match[1] ? match[1] : null;
+      return domain ? `https://www.faviconextractor.com/favicon/${domain}` : '';
+    } catch {
+      return '';
     }
   }
 }

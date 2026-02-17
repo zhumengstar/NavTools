@@ -212,9 +212,6 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  // 创建Material UI主题
-  // Create Material UI Theme
-
 
   // 切换主题的回调函数
   const toggleTheme = () => {
@@ -237,12 +234,12 @@ function App() {
     groupsRef.current = groups;
   }, [groups]);
 
-  const [_isAuthRequired, setIsAuthRequired] = useState(false);
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginLoading, setLoginLoading] = useState(false); // Added missing state
+  const [loginLoading, setLoginLoading] = useState(false);
   const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
@@ -588,7 +585,7 @@ function App() {
   // 检查认证状态
   const checkAuthStatus = async () => {
     try {
-      // setIsAuthChecking(true); // 不再在这里设置，我们在 useEffect 开始时设置
+
       console.log('开始检查认证状态...');
 
       // 尝试进行API调用,检查是否需要认证
@@ -601,7 +598,7 @@ function App() {
         api.isAuthenticated = false; // 同步 API 客户端状态
         setIsAuthenticated(false);
         setIsAdmin(false);
-        setIsAuthRequired(false);
+
         setViewMode('readonly');
         // 未认证时不自动加载数据，显示访客主页
         setGroups([]);
@@ -610,7 +607,7 @@ function App() {
         // 已认证，设置为编辑模式
         api.isAuthenticated = true; // 同步 API 客户端状态
         setIsAuthenticated(true);
-        setIsAuthRequired(false);
+
         setViewMode('edit');
 
         // 已认证情况下，尝试从缓存快速加载数据以实现 Early SWR
@@ -656,7 +653,7 @@ function App() {
     } catch (error) {
       console.error('认证检查及数据加载流程失败:', error);
       setIsAuthenticated(false);
-      setIsAuthRequired(false);
+
       setViewMode('readonly');
       setGroups([]); // 出错也视为访客模式，清空数据以显示 VisitorHome
       localStorage.removeItem(CACHE_DATA_KEY);
@@ -680,7 +677,7 @@ function App() {
         // 登录成功，立即切换状态并关闭登录界面
         api.isAuthenticated = true; // 同步 API 客户端状态
         setIsAuthenticated(true);
-        setIsAuthRequired(false);
+
         setViewMode('edit');
         setUsername(username);
         // 获取用户头像
@@ -853,7 +850,7 @@ function App() {
     setUsername('User'); // 重置用户名
     setAvatarUrl(null); // 重置头像
     setIsAdmin(false); // 显式重置管理员权限
-    setIsAuthRequired(false); // 允许继续以访客身份访问
+
     setViewMode('readonly'); // 切换到只读模式
 
     // 登出后清空数据，显示访客主页
@@ -1061,7 +1058,7 @@ function App() {
 
       // 同时也获取该用户的配置
       const userConfigs = await api.getConfigs();
-      setConfigs(prev => ({ ...DEFAULT_CONFIGS, ...userConfigs, isAdmin: isAdmin ? 'true' : 'false' }));
+      setConfigs(prev => ({ ...prev, ...userConfigs, isAdmin: isAdmin ? 'true' : 'false' }));
 
       // 获取所有分组和站点数据
       const groupsWithSites = await api.getGroupsWithSites();
@@ -1959,9 +1956,8 @@ function App() {
             setImportResultOpen(true);
           }
 
-          // 刷新数据
-          await fetchData();
-          await fetchConfigs();
+          // 刷新数据（使用静默加载，并通过 fetchData 内部逻辑决定是否显示骨架屏）
+          await fetchData(true);
           handleCloseImport();
         } catch (error) {
           console.error('解析导入数据失败:', error);
@@ -2044,9 +2040,6 @@ function App() {
       let sitesSkipped = initialSitesSkipped;
       let processed = initialProcessed;
 
-      // 刷新最新分组数据以确保匹配准确
-      await fetchData();
-
       // 使用本地副本实时跟踪分组，包括本次导入新建的分组
       let workingGroups = [...groups];
 
@@ -2125,15 +2118,28 @@ function App() {
           } else {
             try {
               const siteName = bookmark.title || extractDomain(bookmark.url) || 'New Site';
-              await api.createSite({
+              const createdSite = await api.createSite({
                 name: siteName,
                 url: bookmark.url,
                 group_id: targetGroup.id as number,
                 order_num: maxOrderNum++,
                 is_public: 1,
               } as Site);
+
+              // 关键：立即更新本地副本和 UI 状态
+              workingGroups = workingGroups.map(g => {
+                if (g.id === targetGroup!.id) {
+                  return {
+                    ...g,
+                    sites: [...(g.sites || []), createdSite]
+                  };
+                }
+                return g;
+              });
+              setGroups(workingGroups);
               sitesCreated++;
             } catch (error) {
+              console.error(`创建书签 "${bookmark.url}" 失败:`, error);
             }
           }
 
@@ -2171,7 +2177,8 @@ function App() {
       setImportResultOpen(true);
       clearImportTask();
 
-      await fetchData();
+      // 完成后执行一次静默同步
+      await fetchData(true);
     } catch (error) {
       console.error('迭代导入失败:', error);
     } finally {
