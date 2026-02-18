@@ -617,6 +617,7 @@ function App() {
         const cachedData = loadFromCache(CACHE_DATA_KEY);
         if (cachedData && groups.length === 0) {
           setGroups(cachedData);
+          setIsInitialDataLoaded(true); // 额外确保栅栏开启
         }
 
         // 尝试从缓存加载用户资料 (优先显示)
@@ -656,7 +657,7 @@ function App() {
       setViewMode('readonly');
     } finally {
       setIsAuthChecking(false);
-      setLoading(false); // 确保 loading 也会关闭
+      // init 函数会负责最终的 setLoading(false)
     }
   };
 
@@ -863,9 +864,24 @@ function App() {
     const init = async () => {
       try {
         console.log('[Init] 启动初始化流程...');
-        // 如果没有缓存数据，才展示 loading
-        const hasCache = !!localStorage.getItem(CACHE_DATA_KEY);
-        if (!hasCache) setLoading(true);
+
+        // --- 性能优化：缓存优先策略 ---
+        // 尝试立即同步读取缓存以消除首屏空白
+        const cachedConfigs = loadFromCache(CACHE_CONFIG_KEY);
+        if (cachedConfigs) {
+          setConfigs(prev => ({ ...prev, ...cachedConfigs }));
+          setTempConfigs(prev => ({ ...prev, ...cachedConfigs }));
+        }
+
+        const cachedData = loadFromCache(CACHE_DATA_KEY);
+        if (cachedData) {
+          console.log('[Init] 发现本地缓存，优先渲染');
+          setGroups(cachedData);
+          setIsInitialDataLoaded(true); // 开启栅栏，允许外部组件渲染
+          setLoading(false); // 关闭 Loading，直接显示缓存内容
+        } else {
+          setLoading(true);
+        }
 
         setIsAuthChecking(true);
 
@@ -878,7 +894,7 @@ function App() {
         // 2. 检查认证状态（内部会触发 fetchData）
         await checkAuthStatus();
 
-        // 3. 标记初次数据加载完成
+        // 3. 标记初次数据加载完成（如果没有缓存，现在也是完成了）
         setIsInitialDataLoaded(true);
         console.log('[Init] 初始化流程完成，栅栏已开启');
 
@@ -2769,9 +2785,9 @@ function App() {
                 </Stack>
               }
             >
-              {isAuthChecking ? (
+              {(isAuthChecking && groups.length === 0) ? (
                 <PageSkeleton />
-              ) : (!isAuthenticated && groups.length === 0) ? (
+              ) : (!isAuthenticated && groups.length === 0 && isInitialDataLoaded) ? (
                 <Suspense fallback={<PageSkeleton />}>
                   <VisitorHome
                     api={api}
