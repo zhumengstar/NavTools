@@ -1635,11 +1635,11 @@ export class NavigationAPI {
           if (group.id) groupMap.set(group.id, existing.id as number);
           stats.groups.merged++;
         } else {
-          // 同步创建分组以获取 ID（虽然牺牲了一点性能，但保证了逻辑正确性）
+          // 同步创建分组以获取 ID
           const newGroup = await this.createGroup({
             name: group.name,
             order_num: group.order_num,
-            is_public: group.is_public ?? 1
+            is_public: 1 // 强制所有导入数据默认可见 (公开)
           }, userId);
           if (group.id && newGroup.id) {
             groupMap.set(group.id, newGroup.id);
@@ -1663,14 +1663,14 @@ export class NavigationAPI {
         if (existing) {
           siteStmts.push(
             this.db.prepare(
-              'UPDATE sites SET name = ?, icon = ?, description = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+              'UPDATE sites SET name = ?, icon = ?, description = ?, notes = ?, is_public = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
             ).bind(site.name, icon, site.description || '', site.notes || '', existing.id)
           );
           stats.sites.updated++;
         } else {
           siteStmts.push(
             this.db.prepare(
-              'INSERT INTO sites (group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
+              'INSERT INTO sites (group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             ).bind(
               newGroupId,
               site.name,
@@ -1678,8 +1678,7 @@ export class NavigationAPI {
               icon,
               site.description || '',
               site.notes || '',
-              site.order_num || 0,
-              site.is_public ?? 1
+              site.order_num || 0
             )
           );
           stats.sites.created++;

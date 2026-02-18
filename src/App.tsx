@@ -534,18 +534,22 @@ function App() {
     localStorage.removeItem(IMPORT_TASK_KEY);
   };
 
-  // 恢复导入任务的函数
-  const handleResumeImport = async (task: any) => {
-    const { bookmarkGroups, processed, totalBookmarks, groupsCreated, groupsMerged, sitesCreated, sitesSkipped, type } = task;
+  // 恢复导入任务的函数（稳定引用，防止 useEffect 无限循环）
+  const handleResumeImport = useCallback(async (task: any) => {
+    const { bookmarkGroups, processed, totalBookmarks, groupsCreated, groupsMerged, sitesCreated, sitesSkipped, type, groupIndex, bookmarkOffset } = task;
     if (type !== 'chrome' || !bookmarkGroups) return;
 
     setImportLoading(true);
     setImportType('chrome');
-    setChromeImportProgress(Math.round((processed / totalBookmarks) * 100));
+    setChromeImportProgress(Math.min(99, Math.round((sitesCreated / totalBookmarks) * 100)));
+    setImportStartTime(Date.now());
 
-    // 由于现在有了 InitialDataLoaded 栅栏，我们可以立即执行，无需延时
-    runImportIteration(bookmarkGroups, processed, totalBookmarks, groupsCreated, groupsMerged, sitesCreated, sitesSkipped);
-  };
+    // 恢复前先同步一次后端数据
+    await fetchData(false);
+
+    // 从断点处继续导入
+    await runImportIteration(bookmarkGroups, processed, totalBookmarks, groupsCreated, groupsMerged, sitesCreated, sitesSkipped, groupIndex || 0, bookmarkOffset || 0);
+  }, []);
 
   // 跨分组拖拽状态
   const [draggedSiteId, setDraggedSiteId] = useState<string | null>(null);
@@ -564,7 +568,8 @@ function App() {
     }
   }, []);
 
-  // 页面加载完成后，检查是否有未完成的导入任务
+
+  // 页面加载完成后，检查是否有未完成的导入任务并自动恢复
   useEffect(() => {
     // 只有在认证通过 且 初始数据（groups/configs）加载完成后才尝试恢复
     if (isAuthenticated && isInitialDataLoaded) {
@@ -573,7 +578,8 @@ function App() {
         try {
           const task = JSON.parse(savedTask);
           if (Date.now() - task.timestamp < 3600000) { // 1小时有效期
-            console.log('[Import] 检测到未完成任务，准备恢复...', task.type);
+            console.log('[Import] 检测到未完成任务，自动开始静默恢复...', task.type);
+            // 默认继续导入，不再弹窗询问
             handleResumeImport(task);
           } else {
             console.log('[Import] 任务已过期');
@@ -584,7 +590,7 @@ function App() {
         }
       }
     }
-  }, [isAuthenticated, isInitialDataLoaded]);
+  }, [isAuthenticated, isInitialDataLoaded, handleResumeImport]);
 
   // 菜单打开关闭
   // 检查认证状态
@@ -633,32 +639,28 @@ function App() {
         // 获取详细用户资料以确定角色 (并行更新)
         try {
           const profile = await (api as any).getUserProfile();
+          const adminStatus = profile.role === 'admin';
+
+          // 批量更新状态以减少渲染
           setUsername(profile.username);
           setAvatarUrl(profile.avatar_url || null);
-          const adminStatus = profile.role === 'admin';
           setIsAdmin(adminStatus);
-          setConfigs(prev => {
-            const next = { ...prev, isAdmin: adminStatus ? 'true' : 'false' };
-            console.log('[Debug] checkAuthStatus - Setting configs:', next);
-            return next;
-          });
+          setConfigs(prev => ({ ...prev, isAdmin: adminStatus ? 'true' : 'false' }));
+
           // 更新缓存
           saveToCache(CACHE_PROFILE_KEY, profile);
         } catch (e) {
           console.warn('获取用户资料失败，回退到默认设置:', e);
         }
 
-        // 只有且仅当认证成功后，才加载业务数据
-        await fetchData();
+        // 数据加载由 init 控制，这里只确保状态同步
       }
     } catch (error) {
-      console.error('认证检查及数据加载流程失败:', error);
+      console.error('认证检查流程失败:', error);
       setIsAuthenticated(false);
       setViewMode('readonly');
-    } finally {
-      setIsAuthChecking(false);
-      // init 函数会负责最终的 setLoading(false)
     }
+    // 注意：setIsAuthChecking(false) 统一移到 init 的 finally 中
   };
 
 
@@ -865,8 +867,9 @@ function App() {
       try {
         console.log('[Init] 启动初始化流程...');
 
-        // --- 性能优化：缓存优先策略 ---
-        // 尝试立即同步读取缓存以消除首屏空白
+        // --- 性能优化：静默缓存预加载 ---
+        // 仅在后台读取缓存数据，供后续 fetchData 进行 Diff 对比或静默填充
+        // 不在这里开启 setIsInitialDataLoaded(true)，防止未校验身份前就显示过时数据
         const cachedConfigs = loadFromCache(CACHE_CONFIG_KEY);
         if (cachedConfigs) {
           setConfigs(prev => ({ ...prev, ...cachedConfigs }));
@@ -875,26 +878,27 @@ function App() {
 
         const cachedData = loadFromCache(CACHE_DATA_KEY);
         if (cachedData) {
-          console.log('[Init] 发现本地缓存，优先渲染');
+          console.log('[Init] 预加载本地缓存数据 (Silent)');
           setGroups(cachedData);
-          setIsInitialDataLoaded(true); // 开启栅栏，允许外部组件渲染
-          setLoading(false); // 关闭 Loading，直接显示缓存内容
-        } else {
-          setLoading(true);
         }
+
+        // 初始设为加载中，保持 Skeleton 稳定
+        setLoading(true);
 
         setIsAuthChecking(true);
 
-        // 1. 初始化数据库和加载基础配置
-        await Promise.allSettled([
-          api.initDB(),
-          fetchConfigs()
-        ]);
+        // 1. 初始化数据库
+        await api.initDB();
 
-        // 2. 检查认证状态（内部会触发 fetchData）
+        // 2. 检查认证状态并串行/并行加载核心配置
+        // 注意：checkAuthStatus 内部会设置基础身份，fetchConfigs 依赖身份关联
         await checkAuthStatus();
+        await fetchConfigs();
 
-        // 3. 标记初次数据加载完成（如果没有缓存，现在也是完成了）
+        // 3. 确定最终的业务数据（不管缓存是否命中，都要进行一次正式获取以确保 SWR 最终一致）
+        await fetchData(false);
+
+        // 4. 全部准备就绪后，标记初次数据加载完成，开启栅栏
         setIsInitialDataLoaded(true);
         console.log('[Init] 初始化流程完成，栅栏已开启');
 
@@ -1089,8 +1093,9 @@ function App() {
       const groupsWithSites = await api.getGroupsWithSites();
       setGroups(groupsWithSites);
 
-      // 只有在已认证模式下才缓存业务数据
-      if (isAuthenticated) {
+      // 书签数据持久化（确保初始化后的第二次真实数据能存入缓存）
+      // 这里的逻辑：如果有数据且是合法用户（或访客态下的公开数据，根据业务需求），则存入
+      if (groupsWithSites && groupsWithSites.length > 0) {
         saveToCache(CACHE_DATA_KEY, groupsWithSites);
         saveToCache(CACHE_CONFIG_KEY, userConfigs);
       }
@@ -2019,11 +2024,7 @@ function App() {
       setImportRemainingSeconds(null);
       setImportStartTime(Date.now());
 
-      // --- 第一阶段：文件分析 ---
-      setSnackbarMessage('正在分析书签文件...');
-      setSnackbarSeverity('info');
-      setSnackbarOpen(true);
-
+      // 分析书签文件
       const htmlContent = await importFile.text();
       const bookmarkGroups = parseBookmarks(htmlContent, '书签');
 
@@ -2031,18 +2032,16 @@ function App() {
         throw new Error('未在书签文件中找到任何有效书签');
       }
 
-      // 统计分析结果
       let totalBookmarks = 0;
       bookmarkGroups.forEach(g => { totalBookmarks += g.bookmarks.length; });
 
-      // 分析完成，按用户要求设置进度为 100
-      setChromeImportProgress(100);
-      setSnackbarMessage(`分析完成，发现 ${totalBookmarks} 个书签，正在开始导入...`);
-      setSnackbarOpen(true);
+      handleSuccess(`分析完成，发现 ${totalBookmarks} 个书签，正在导入...`);
 
-      // --- 第二阶段：执行导入 ---
-      await fetchData();
-      await runImportIteration(bookmarkGroups, 0, totalBookmarks, 0, 0, 0, 0);
+      // 先同步一次后端数据，确保分组查重准确
+      await fetchData(false);
+
+      // 执行导入（从第 0 个分组、偏移 0 开始）
+      await runImportIteration(bookmarkGroups, 0, totalBookmarks, 0, 0, 0, 0, 0, 0);
     } catch (error) {
       console.error('导入Chrome书签失败:', error);
       handleError('导入Chrome书签失败: ' + (error instanceof Error ? error.message : '未知错误'));
@@ -2053,7 +2052,6 @@ function App() {
   };
 
 
-
   const runImportIteration = async (
     bookmarkGroups: BookmarkGroup[],
     initialProcessed: number,
@@ -2061,7 +2059,9 @@ function App() {
     initialGroupsCreated: number,
     initialGroupsMerged: number,
     initialSitesCreated: number,
-    initialSitesSkipped: number
+    initialSitesSkipped: number,
+    startGroupIndex: number = 0,
+    startBookmarkOffset: number = 0
   ) => {
     try {
       let groupsCreated = initialGroupsCreated;
@@ -2070,11 +2070,17 @@ function App() {
       let sitesSkipped = initialSitesSkipped;
       let processed = initialProcessed;
 
-      // 使用本地副本实时跟踪分组，包括本次导入新建的分组
+      // 本地查重副本
       let workingGroups = [...groups];
 
-      for (const bookmarkGroup of bookmarkGroups) {
-        // --- 取消检查 ---
+      // 计算新分组的起始 order_num
+      let nextGroupOrder = workingGroups.length > 0
+        ? Math.max(...workingGroups.map(g => g.order_num)) + 1
+        : 0;
+
+      // 从 startGroupIndex 开始遍历（断点续传）
+      for (let gi = startGroupIndex; gi < bookmarkGroups.length; gi++) {
+        const bookmarkGroup = bookmarkGroups[gi];
         if (isImportCancelled.current) {
           clearImportTask();
           setImportLoading(false);
@@ -2084,7 +2090,6 @@ function App() {
 
         const { groupName, bookmarks } = bookmarkGroup;
 
-        // 在实时更新的 workingGroups 中查找是否有同名分组
         let targetGroup = workingGroups.find(
           g => g.name.trim().toLowerCase() === groupName.trim().toLowerCase()
         );
@@ -2093,7 +2098,6 @@ function App() {
           groupsMerged++;
         } else {
           try {
-            // --- 取消检查 ---
             if (isImportCancelled.current) {
               clearImportTask();
               setImportLoading(false);
@@ -2103,21 +2107,26 @@ function App() {
 
             const newGroup = await api.createGroup({
               name: groupName.trim(),
-              order_num: workingGroups.length,
+              order_num: nextGroupOrder++,
               is_public: 1,
             } as Group);
             targetGroup = { ...newGroup, sites: [] } as GroupWithSites;
-
-            // 关键：立即更新本地 workingGroups 引用，供下一个循环查重使用
             workingGroups = [...workingGroups, targetGroup];
-
-            // 同步 UI 状态
-            setGroups(workingGroups);
             groupsCreated++;
+
+            // ✅ 实时显示新分组（追加到末尾，保持导入顺序）
+            setGroups(prev => {
+              const updated = [...prev, targetGroup!];
+              saveToCache(CACHE_DATA_KEY, updated);
+              return updated;
+            });
+            setVisibleGroupsCount(prev => Math.max(prev, workingGroups.length));
           } catch (error) {
-            console.error(`恢复/创建分组 "${groupName}" 失败:`, error);
+            console.error(`创建分组 "${groupName}" 失败:`, error);
             processed += bookmarks.length;
             sitesSkipped += bookmarks.length;
+            const progress = totalBookmarks > 0 ? Math.min(99, Math.round((sitesCreated / totalBookmarks) * 100)) : 0;
+            setChromeImportProgress(progress);
             continue;
           }
         }
@@ -2127,14 +2136,16 @@ function App() {
           ? Math.max(...existingSites.map(s => s.order_num)) + 1
           : 0;
 
-        // URL 规范化函数
         const normalizeUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '');
         const existingUrls = new Set(existingSites.map(s => normalizeUrl(s.url)));
 
-        // --- 核心：50 个一组进行逻辑分段 ---
         const chunkSize = 50;
-        for (let j = 0; j < bookmarks.length; j += chunkSize) {
-          // --- 取消检查 ---
+        const currentTargetGroupId = targetGroup.id;
+
+        // 断点续传：如果是第一个恢复的分组，从 startBookmarkOffset 开始；否则从 0 开始
+        const jStart = (gi === startGroupIndex) ? startBookmarkOffset : 0;
+
+        for (let j = jStart; j < bookmarks.length; j += chunkSize) {
           if (isImportCancelled.current) {
             clearImportTask();
             setImportLoading(false);
@@ -2143,39 +2154,11 @@ function App() {
           }
 
           const currentChunk = bookmarks.slice(j, j + chunkSize);
-          const isChunked = bookmarks.length > chunkSize;
 
-          if (isChunked) {
-            console.log(`[Import] 分组 "${groupName}" 正在处理第 ${Math.floor(j / chunkSize) + 1} 批次 (${currentChunk.length} 个书签)`);
-          }
-
-          for (let k = 0; k < currentChunk.length; k++) {
-            const bookmark = currentChunk[k];
-            if (!bookmark) continue;
-            const currentNormalizedUrl = normalizeUrl(bookmark.url);
-
-            if (existingUrls.has(currentNormalizedUrl)) {
-              sitesSkipped++;
-            } else {
-              // const siteName = bookmark.title || extractDomain(bookmark.url) || 'New Site';
-
-              // 构造后端需要的批量导入格式
-              // 构造后端需要的批量导入格式 (暂不使用，使用下方批量提交)
-              // const importPayload = { ... };
-
-              try {
-                // 真正的批量提交（虽然这里是 chunk 内部的一组，但后端 importData 本身已优化）
-                // 为了严格符合用户“50个一导入”且日志能反映出来，我们应该在这层进行批量调用
-                // 注意：为了保持进度实时性，我们保持这个循环，但改用一次性提交整个 chunk 的策略
-              } catch (e) { }
-            }
-          }
-
-          // --- 修正：将这 50 个书签一次性打包提交 ---
           const sitesToImport = currentChunk
-            .filter(b => !existingUrls.has(normalizeUrl(b.url)))
+            .filter(b => b && b.url && !existingUrls.has(normalizeUrl(b.url)))
             .map(b => ({
-              group_id: targetGroup!.id as number,
+              group_id: currentTargetGroupId as number,
               name: b.title || extractDomain(b.url) || 'New Site',
               url: b.url,
               order_num: maxOrderNum++,
@@ -2185,11 +2168,14 @@ function App() {
               notes: ''
             }));
 
+          const localSkips = currentChunk.length - sitesToImport.length;
+          sitesSkipped += localSkips;
+
           if (sitesToImport.length > 0) {
             try {
               const batchResult = await api.importData({
                 groups: [{
-                  id: targetGroup!.id as number,
+                  id: currentTargetGroupId as number,
                   name: groupName,
                   order_num: targetGroup!.order_num,
                   is_public: 1
@@ -2201,62 +2187,39 @@ function App() {
               });
 
               if (batchResult.success && batchResult.stats) {
-                // 使用后端返回的真实统计数据
-                const { created, skipped } = batchResult.stats.sites;
-                sitesCreated += created;
-                sitesSkipped += skipped;
+                sitesCreated += batchResult.stats.sites.created;
+                sitesSkipped += batchResult.stats.sites.skipped;
 
-                console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次导入完成 (新增 ${created} 个，跳过 ${skipped} 个)`);
-
-                // --- 视觉优化：局部状态乐观追加 ---
-                // 注意：如果后端有跳过，这里按 sitesToImport 全量追加会有微小视觉误差，但 fetchData(false) 最终会修正
-                const sitesAdded = sitesToImport as any[];
-
-                setGroups(prevGroups => {
-                  const updatedGroups = prevGroups.map(g => {
-                    if (g.id === targetGroup!.id) {
-                      return {
-                        ...g,
-                        sites: [...(g.sites || []), ...sitesAdded]
-                      };
+                // ✅ 实时显示新增站点（追加到末尾，保持导入顺序）
+                setGroups(prev => {
+                  const updated = prev.map(g => {
+                    if (g.id === currentTargetGroupId) {
+                      return { ...g, sites: [...(g.sites || []), ...sitesToImport as any[]] };
                     }
                     return g;
                   });
-
-                  // 关键细节：同步更新外部 workingGroups，确保后续循环拿到最新 site 列表
-                  workingGroups = updatedGroups;
-                  return updatedGroups;
+                  saveToCache(CACHE_DATA_KEY, updated);
+                  return updated;
                 });
-
-                // 暂时放开渐进式渲染限制
-                setVisibleGroupsCount(prev => Math.max(prev, workingGroups.length));
               }
             } catch (error) {
-              console.error(`[Import] 批量导入批次失败:`, error);
+              console.error(`[Import] 批量导入失败:`, error);
+              sitesSkipped += sitesToImport.length;
             }
           }
 
+          // 进度基于实际导入完成量（sitesCreated）/ 总量，未完成时最大 99%
           processed += currentChunk.length;
-
-          // 核心：不再在分批中途执行 fetchData(true)，防止 API 快照回滚导致的数值跳动
-          // 我们依赖上面的 setGroups 局部更新来维持 UI 的最新状态
-
-          const progress = totalBookmarks > 0 ? Math.min(100, Math.round((sitesCreated / totalBookmarks) * 100)) : 0;
+          const progress = totalBookmarks > 0 ? Math.min(99, Math.round((sitesCreated / totalBookmarks) * 100)) : 0;
           setChromeImportProgress(progress);
 
-          // 计算预计剩余时间
-          if (importStartTime && (sitesCreated + sitesSkipped) > 0) {
+          // 预估剩余时间（基于已处理数 processed）
+          if (importStartTime && processed > 0) {
             const elapsed = (Date.now() - importStartTime) / 1000;
-            const itemsProcessed = sitesCreated + sitesSkipped;
-            const itemsRemaining = totalBookmarks - itemsProcessed;
-            const speed = itemsProcessed / elapsed; // items per second
-            if (speed > 0) {
-              const remaining = Math.round(itemsRemaining / speed);
-              setImportRemainingSeconds(remaining);
-            }
+            const remaining = Math.round(((totalBookmarks - processed) / processed) * elapsed);
+            setImportRemainingSeconds(remaining > 0 ? remaining : null);
           }
 
-          // 每批次强制持久化一次
           saveImportTask({
             type: 'chrome',
             bookmarkGroups,
@@ -2265,33 +2228,32 @@ function App() {
             groupsCreated,
             groupsMerged,
             sitesCreated,
-            sitesSkipped
+            sitesSkipped,
+            groupIndex: gi,
+            bookmarkOffset: j + chunkSize
           });
 
           // 释放主线程
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } // chunks loop end
-      } // outer loop end
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+      }
 
-      // 书签统计
-      const actualSitesCreated = sitesCreated;
-      // const actualSitesSkipped = sitesSkipped;
+      // === 导入完成 ===
+      // 进度到达 100%
+      setChromeImportProgress(100);
 
       const summary = [
         `Chrome 书签导入完成！`,
-        `分组：发现 ${bookmarkGroups.length} 个，新建 ${groupsCreated} 个`,
-        `书签：共 ${totalBookmarks} 个，实际新增 ${actualSitesCreated} 个`,
+        `新建 ${groupsCreated} 个分组，新增 ${sitesCreated} 个书签`,
       ].join('\n');
 
       setImportResultMessage(summary);
       setImportResultOpen(true);
       clearImportTask();
-
-      // 完成后撤销计时器
       setImportRemainingSeconds(null);
       setImportStartTime(null);
 
-      // 完成后执行无缓存同步
+      // 最终同步后端数据（fetchData 内部会自动更新缓存）
       await fetchData(false);
     } catch (error) {
       console.error('迭代导入失败:', error);
@@ -3427,17 +3389,19 @@ function App() {
                       </Typography>
                     )}
                   </Box>
-                  {importType === 'chrome' && importLoading && chromeImportProgress > 0 && (
+                  {importType === 'chrome' && importLoading && (
                     <Box sx={{ mb: 2 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant='body2' color='text.secondary' sx={{ minWidth: 55, mr: 1, whiteSpace: 'nowrap', fontSize: '0.75rem' }}>
+                          {importRemainingSeconds !== null && importRemainingSeconds > 0
+                            ? `约 ${importRemainingSeconds} 秒`
+                            : '计算中...'}
+                        </Typography>
                         <Box sx={{ width: '100%', mr: 1 }}>
                           <LinearProgress variant='determinate' value={chromeImportProgress} />
                         </Box>
-                        <Typography variant='body2' color='text.secondary' sx={{ minWidth: 40, display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {importRemainingSeconds !== null && importRemainingSeconds > 0 && (
-                            <span style={{ fontSize: '0.75rem', color: 'rgba(0,0,0,0.5)' }}>约 {importRemainingSeconds} 秒</span>
-                          )}
-                          <span>{chromeImportProgress}%</span>
+                        <Typography variant='body2' color='text.secondary' sx={{ minWidth: 35, textAlign: 'right' }}>
+                          {chromeImportProgress}%
                         </Typography>
                       </Box>
                     </Box>
@@ -3614,6 +3578,7 @@ function App() {
             </DialogActions>
           </Dialog>
 
+
           <SiteSettingsModal
             site={siteToSettings || { id: 0, name: '', url: '', group_id: 0, order_num: 0, is_public: 1, icon: '', description: '', notes: '' }}
             open={isSettingsOpen}
@@ -3631,8 +3596,9 @@ function App() {
             api={api}
           />
         </>
-      )}
-    </ThemeProvider>
+      )
+      }
+    </ThemeProvider >
   );
 }
 
