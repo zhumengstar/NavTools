@@ -1009,6 +1009,9 @@ function App() {
     // 权限校验：仅在登录状态下启动自动补全和清理流程
     if (!isAuthenticated) return;
 
+    // 检查配置是否开启
+    if (configs['site.autoCompleteInfo'] !== 'true') return;
+
     // 找出名称或描述为空的站点
     const sitesToRefresh: Site[] = [];
     groups.forEach(group => {
