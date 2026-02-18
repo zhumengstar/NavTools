@@ -226,6 +226,7 @@ function App() {
   const [currentSortingGroupId, setCurrentSortingGroupId] = useState<number | null>(null);
 
   // 新增认证状态
+  const [isInitialDataLoaded, setIsInitialDataLoaded] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // 使用 ref 追踪 groups 的最新状态，避免 handleExportData 频繁更新导致 UserAvatar 重渲染
@@ -539,10 +540,8 @@ function App() {
     setImportType('chrome');
     setChromeImportProgress(Math.round((processed / totalBookmarks) * 100));
 
-    // 异步执行
-    setTimeout(() => {
-      runImportIteration(bookmarkGroups, processed, totalBookmarks, groupsCreated, groupsMerged, sitesCreated, sitesSkipped);
-    }, 1000);
+    // 由于现在有了 InitialDataLoaded 栅栏，我们可以立即执行，无需延时
+    runImportIteration(bookmarkGroups, processed, totalBookmarks, groupsCreated, groupsMerged, sitesCreated, sitesSkipped);
   };
 
   // 跨分组拖拽状态
@@ -564,14 +563,17 @@ function App() {
 
   // 页面加载完成后，检查是否有未完成的导入任务
   useEffect(() => {
-    if (isAuthenticated) {
+    // 只有在认证通过 且 初始数据（groups/configs）加载完成后才尝试恢复
+    if (isAuthenticated && isInitialDataLoaded) {
       const savedTask = localStorage.getItem(IMPORT_TASK_KEY);
       if (savedTask) {
         try {
           const task = JSON.parse(savedTask);
           if (Date.now() - task.timestamp < 3600000) { // 1小时有效期
+            console.log('[Import] 检测到未完成任务，准备恢复...', task.type);
             handleResumeImport(task);
           } else {
+            console.log('[Import] 任务已过期');
             clearImportTask();
           }
         } catch (e) {
@@ -579,13 +581,12 @@ function App() {
         }
       }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isInitialDataLoaded]);
 
   // 菜单打开关闭
   // 检查认证状态
   const checkAuthStatus = async () => {
     try {
-
       console.log('开始检查认证状态...');
 
       // 尝试进行API调用,检查是否需要认证
@@ -598,16 +599,15 @@ function App() {
         api.isAuthenticated = false; // 同步 API 客户端状态
         setIsAuthenticated(false);
         setIsAdmin(false);
-
         setViewMode('readonly');
-        // 未认证时不自动加载数据，显示访客主页
-        setGroups([]);
-        localStorage.removeItem(CACHE_DATA_KEY);
+
+        // 注意：这里不再主动清空 groups，以便在刷新瞬间保持本地数据的可见性
+        // 由 fetchData 根据 API 返回值决定最终内容
       } else {
         // 已认证，设置为编辑模式
+        console.log('认证成功');
         api.isAuthenticated = true; // 同步 API 客户端状态
         setIsAuthenticated(true);
-
         setViewMode('edit');
 
         // 已认证情况下，尝试从缓存快速加载数据以实现 Early SWR
@@ -642,21 +642,15 @@ function App() {
           saveToCache(CACHE_PROFILE_KEY, profile);
         } catch (e) {
           console.warn('获取用户资料失败，回退到默认设置:', e);
-          setUsername('User');
-          setIsAdmin(false);
         }
 
         // 只有且仅当认证成功后，才加载业务数据
         await fetchData();
       }
-
     } catch (error) {
       console.error('认证检查及数据加载流程失败:', error);
       setIsAuthenticated(false);
-
       setViewMode('readonly');
-      setGroups([]); // 出错也视为访客模式，清空数据以显示 VisitorHome
-      localStorage.removeItem(CACHE_DATA_KEY);
     } finally {
       setIsAuthChecking(false);
       setLoading(false); // 确保 loading 也会关闭
@@ -865,18 +859,25 @@ function App() {
     // 立即开始并行初始化
     const init = async () => {
       try {
+        console.log('[Init] 启动初始化流程...');
         // 如果没有缓存数据，才展示 loading
         const hasCache = !!localStorage.getItem(CACHE_DATA_KEY);
         if (!hasCache) setLoading(true);
 
         setIsAuthChecking(true);
 
-        // 并行化所有初始化任务
+        // 1. 初始化数据库和加载基础配置
         await Promise.allSettled([
-          fetchConfigs(),
           api.initDB(),
-          checkAuthStatus()
+          fetchConfigs()
         ]);
+
+        // 2. 检查认证状态（内部会触发 fetchData）
+        await checkAuthStatus();
+
+        // 3. 标记初次数据加载完成
+        setIsInitialDataLoaded(true);
+        console.log('[Init] 初始化流程完成，栅栏已开启');
 
       } catch (error) {
         console.error('初始化失败:', error);
@@ -1957,7 +1958,8 @@ function App() {
           }
 
           // 刷新数据（使用静默加载，并通过 fetchData 内部逻辑决定是否显示骨架屏）
-          await fetchData(true);
+          // 强制不使用缓存：fetchData(false)
+          await fetchData(false);
           handleCloseImport();
         } catch (error) {
           console.error('解析导入数据失败:', error);
@@ -2177,8 +2179,8 @@ function App() {
       setImportResultOpen(true);
       clearImportTask();
 
-      // 完成后执行一次静默同步
-      await fetchData(true);
+      // 完成后执行无缓存同步
+      await fetchData(false);
     } catch (error) {
       console.error('迭代导入失败:', error);
     } finally {
