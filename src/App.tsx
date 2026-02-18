@@ -2103,7 +2103,9 @@ function App() {
         const normalizeUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '');
         const existingUrls = new Set(existingSites.map(s => normalizeUrl(s.url)));
 
-        for (const bookmark of bookmarks) {
+        // --- 核心：50 个一组进行逻辑分段 ---
+        const chunkSize = 50;
+        for (let j = 0; j < bookmarks.length; j += chunkSize) {
           // --- 取消检查 ---
           if (isImportCancelled.current) {
             clearImportTask();
@@ -2112,60 +2114,111 @@ function App() {
             return;
           }
 
-          const currentNormalizedUrl = normalizeUrl(bookmark.url);
+          const currentChunk = bookmarks.slice(j, j + chunkSize);
+          const isChunked = bookmarks.length > chunkSize;
 
-          if (existingUrls.has(currentNormalizedUrl)) {
-            // 如果已存在或者是已处理的，我们增加计数但跳过创建
-            sitesSkipped++;
-          } else {
-            try {
+          if (isChunked) {
+            console.log(`[Import] 分组 "${groupName}" 正在处理第 ${Math.floor(j / chunkSize) + 1} 批次 (${currentChunk.length} 个书签)`);
+          }
+
+          for (let k = 0; k < currentChunk.length; k++) {
+            const bookmark = currentChunk[k];
+            const currentNormalizedUrl = normalizeUrl(bookmark.url);
+
+            if (existingUrls.has(currentNormalizedUrl)) {
+              sitesSkipped++;
+            } else {
               const siteName = bookmark.title || extractDomain(bookmark.url) || 'New Site';
-              const createdSite = await api.createSite({
-                name: siteName,
-                url: bookmark.url,
-                group_id: targetGroup.id as number,
-                order_num: maxOrderNum++,
-                is_public: 1,
-              } as Site);
 
-              // 关键：立即更新本地副本和 UI 状态
-              workingGroups = workingGroups.map(g => {
-                if (g.id === targetGroup!.id) {
-                  return {
-                    ...g,
-                    sites: [...(g.sites || []), createdSite]
-                  };
-                }
-                return g;
-              });
-              setGroups(workingGroups);
-              sitesCreated++;
-            } catch (error) {
-              console.error(`创建书签 "${bookmark.url}" 失败:`, error);
+              // 构造后端需要的批量导入格式
+              const importPayload = {
+                groups: [{
+                  id: targetGroup.id as number,
+                  name: groupName,
+                  order_num: targetGroup.order_num,
+                  is_public: 1
+                }],
+                sites: [{
+                  group_id: targetGroup.id as number,
+                  name: siteName,
+                  url: bookmark.url,
+                  order_num: maxOrderNum++,
+                  is_public: 1
+                }],
+                configs: {}
+              };
+
+              try {
+                // 真正的批量提交（虽然这里是 chunk 内部的一组，但后端 importData 本身已优化）
+                // 为了严格符合用户“50个一导入”且日志能反映出来，我们应该在这层进行批量调用
+                // 注意：为了保持进度实时性，我们保持这个循环，但改用一次性提交整个 chunk 的策略
+              } catch (e) { }
             }
           }
 
-          // 增加处理计数，确保进度被正确保存 (移到 if/else 之外)
-          processed++;
+          // --- 修正：将这 50 个书签一次性打包提交 ---
+          const sitesToImport = currentChunk
+            .filter(b => !existingUrls.has(normalizeUrl(b.url)))
+            .map(b => ({
+              group_id: targetGroup!.id as number,
+              name: b.title || extractDomain(b.url) || 'New Site',
+              url: b.url,
+              order_num: maxOrderNum++,
+              is_public: 1
+            }));
 
-          // 按照用户要求：百分比 = (已导入书签数 / 书签总数)
+          const skippedInChunk = currentChunk.length - sitesToImport.length;
+          sitesSkipped += skippedInChunk;
+
+          if (sitesToImport.length > 0) {
+            try {
+              const batchResult = await api.importData({
+                groups: [{
+                  id: targetGroup!.id as number,
+                  name: groupName,
+                  order_num: targetGroup!.order_num,
+                  is_public: 1
+                }],
+                sites: sitesToImport,
+                configs: {}
+              });
+
+              if (batchResult.success) {
+                sitesCreated += sitesToImport.length;
+                console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次导入成功 (${sitesToImport.length} 个书签)`);
+              }
+            } catch (error) {
+              console.error(`[Import] 批量导入批次失败:`, error);
+            }
+          } else if (skippedInChunk > 0) {
+            console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次全部跳过 (已存在)`);
+          }
+
+          processed += currentChunk.length;
+
+          // 更新 UI 状态
+          if (sitesToImport.length > 0) {
+            await fetchData(true); // 批量静默同步
+          }
+
           const progress = totalBookmarks > 0 ? Math.round((sitesCreated / totalBookmarks) * 100) : 0;
           setChromeImportProgress(progress);
 
-          // 每处理 5 个书签持久化一次
-          if (processed % 5 === 0) {
-            saveImportTask({
-              type: 'chrome',
-              bookmarkGroups,
-              processed,
-              totalBookmarks,
-              groupsCreated,
-              groupsMerged,
-              sitesCreated,
-              sitesSkipped
-            });
-          }
-        } // inner loop end
+          // 每批次强制持久化一次
+          saveImportTask({
+            type: 'chrome',
+            bookmarkGroups,
+            processed,
+            totalBookmarks,
+            groupsCreated,
+            groupsMerged,
+            sitesCreated,
+            sitesSkipped
+          });
+
+          // 释放主线程
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } // chunks loop end
       } // outer loop end
 
       // 完成后清理
