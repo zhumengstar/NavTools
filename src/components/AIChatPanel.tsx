@@ -493,7 +493,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
                             right: 16,
                             width: { xs: 'calc(100vw - 32px)', sm: chatWidth },
                             height: { xs: 'calc(100vh - 100px)', sm: 520 },
-                            zIndex: 1300,
+                            zIndex: 1600,
                             borderRadius: 3,
                             display: 'flex',
                             flexDirection: 'column',
@@ -831,6 +831,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
                                 </IconButton>
                             </Box>
                             <Popover
+                                sx={{ zIndex: 1700 }}
                                 open={Boolean(modelMenuAnchor)}
                                 anchorEl={modelMenuAnchor}
                                 onClose={() => setModelMenuAnchor(null)}
@@ -984,6 +985,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
 
                         {/* 分组选择菜单 */}
                         <Popover
+                            sx={{ zIndex: 1700 }}
                             open={Boolean(anchorPosition)}
                             anchorReference="anchorPosition"
                             anchorPosition={anchorPosition || undefined}

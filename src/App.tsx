@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Portal } from '@mui/material';
 import { NavigationClient } from './API/client';
 import { MockNavigationClient } from './API/mock';
 import { Site, Group } from './API/http';
@@ -3354,6 +3355,9 @@ function App() {
                 onClose={handleCloseImport}
                 maxWidth='sm'
                 fullWidth
+                sx={{ zIndex: 1000 }} // 显式降低层级，确保被 AI 面板覆盖
+                hideBackdrop={importLoading}
+                disableEnforceFocus={importLoading}
                 PaperProps={{
                   sx: {
                     m: { xs: 2, sm: 'auto' },
@@ -3464,79 +3468,81 @@ function App() {
           {
             isAuthenticated && (
               <Suspense fallback={null}>
-                <AIChatPanel
-                  api={api}
-                  username={username}
-                  avatarUrl={avatarUrl}
-                  groups={groups}
-                  onAddSite={async (site) => {
-                    const targetGroup = groups.find(g => g.id === site.groupId);
-                    const orderNum = targetGroup ? targetGroup.sites.length : 0;
-                    const placeholderName = site.name || site.title || new URL(site.url).hostname;
-                    const initialSiteData = {
-                      group_id: site.groupId,
-                      name: placeholderName,
-                      url: site.url,
-                      order_num: orderNum,
-                      is_public: 1,
-                      icon: `https://www.faviconextractor.com/favicon/${new URL(site.url).hostname}`,
-                      description: '',
-                      notes: ''
-                    };
+                <Portal>
+                  <AIChatPanel
+                    api={api}
+                    username={username}
+                    avatarUrl={avatarUrl}
+                    groups={groups}
+                    onAddSite={async (site) => {
+                      const targetGroup = groups.find(g => g.id === site.groupId);
+                      const orderNum = targetGroup ? targetGroup.sites.length : 0;
+                      const placeholderName = site.name || site.title || new URL(site.url).hostname;
+                      const initialSiteData = {
+                        group_id: site.groupId,
+                        name: placeholderName,
+                        url: site.url,
+                        order_num: orderNum,
+                        is_public: 1,
+                        icon: `https://www.faviconextractor.com/favicon/${new URL(site.url).hostname}`,
+                        description: '',
+                        notes: ''
+                      };
 
-                    const tempId = Date.now() * -1;
-                    setGroups(prevGroups => prevGroups.map(group => {
-                      if (group.id === site.groupId) {
-                        return {
-                          ...group,
-                          sites: [...group.sites, { ...initialSiteData, id: tempId } as any]
-                        };
-                      }
-                      return group;
-                    }));
-                    handleSuccess(`已开始添加 URL: ${site.url}`);
+                      const tempId = Date.now() * -1;
+                      setGroups(prevGroups => prevGroups.map(group => {
+                        if (group.id === site.groupId) {
+                          return {
+                            ...group,
+                            sites: [...group.sites, { ...initialSiteData, id: tempId } as any]
+                          };
+                        }
+                        return group;
+                      }));
+                      handleSuccess(`已开始添加 URL: ${site.url}`);
 
-                    (async () => {
-                      try {
-                        const createdSite = await api.createSite(initialSiteData);
-                        if (createdSite && createdSite.id) {
-                          setGroups(prevGroups => prevGroups.map(group => {
-                            if (group.id === site.groupId) {
-                              return {
-                                ...group,
-                                sites: group.sites.map(s => s.id === tempId ? { ...s, id: createdSite.id } : s)
-                              };
-                            }
-                            return group;
-                          }));
-
-                          const info = await api.fetchSiteInfo(site.url) as any;
-                          if (info.success) {
-                            const updatedFields = {
-                              name: info.name || placeholderName,
-                              description: info.description || '',
-                              icon: info.icon || ''
-                            };
-                            await api.updateSite(createdSite.id, updatedFields);
+                      (async () => {
+                        try {
+                          const createdSite = await api.createSite(initialSiteData);
+                          if (createdSite && createdSite.id) {
                             setGroups(prevGroups => prevGroups.map(group => {
                               if (group.id === site.groupId) {
                                 return {
                                   ...group,
-                                  sites: group.sites.map(s => s.id === createdSite.id ? { ...s, ...updatedFields } : s)
+                                  sites: group.sites.map(s => s.id === tempId ? { ...s, id: createdSite.id } : s)
                                 };
                               }
                               return group;
                             }));
+
+                            const info = await api.fetchSiteInfo(site.url) as any;
+                            if (info.success) {
+                              const updatedFields = {
+                                name: info.name || placeholderName,
+                                description: info.description || '',
+                                icon: info.icon || ''
+                              };
+                              await api.updateSite(createdSite.id, updatedFields);
+                              setGroups(prevGroups => prevGroups.map(group => {
+                                if (group.id === site.groupId) {
+                                  return {
+                                    ...group,
+                                    sites: group.sites.map(s => s.id === createdSite.id ? { ...s, ...updatedFields } : s)
+                                  };
+                                }
+                                return group;
+                              }));
+                            }
                           }
+                        } catch (error) {
+                          console.error('AI Chat bookmarking failed:', error);
+                          handleError('后台数据同步失败');
                         }
-                      } catch (error) {
-                        console.error('AI Chat bookmarking failed:', error);
-                        handleError('后台数据同步失败');
-                      }
-                    })();
-                    return true;
-                  }}
-                />
+                      })();
+                      return true;
+                    }}
+                  />
+                </Portal>
               </Suspense>
             )
           }
