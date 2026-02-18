@@ -35,6 +35,7 @@ interface LoginFormProps {
   resetPasswordLoading?: boolean;
   resetPasswordError?: string | null;
   resetPasswordSuccess?: string | null;
+  enableForgotPassword?: boolean; // New prop
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({
@@ -51,6 +52,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   resetPasswordLoading = false,
   resetPasswordError = null,
   resetPasswordSuccess = null,
+  enableForgotPassword = true, // Default to true
 }) => {
   const [mode, setMode] = useState<FormMode>('login');
   const [username, setUsername] = useState('');
@@ -514,15 +516,17 @@ const LoginForm: React.FC<LoginFormProps> = ({
                 >
                   没有账号？注册一个
                 </Link>
-                <Link
-                  component='button'
-                  type='button'
-                  variant='body2'
-                  onClick={() => switchMode('resetPassword')}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  忘记密码？
-                </Link>
+                {enableForgotPassword && (
+                  <Link
+                    component='button'
+                    type='button'
+                    variant='body2'
+                    onClick={() => switchMode('resetPassword')}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    忘记密码？
+                  </Link>
+                )}
               </>
             )}
             {mode === 'register' && (

@@ -35,6 +35,7 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SortIcon from '@mui/icons-material/Sort';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'; // New Icon
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
@@ -449,7 +450,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                 {isAdmin && (
                     <MenuItem onClick={() => { handleMenuClose(); onOpenAdminConfig(); }} sx={menuItemSx}>
                         <ListItemIcon>
-                            <SettingsIcon fontSize='small' />
+                            <AdminPanelSettingsIcon fontSize='small' />
                         </ListItemIcon>
                         <ListItemText>网站管理</ListItemText>
                     </MenuItem>

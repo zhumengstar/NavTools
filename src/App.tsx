@@ -2455,6 +2455,7 @@ function App() {
           resetPasswordLoading={resetPasswordLoading}
           resetPasswordError={resetPasswordError}
           resetPasswordSuccess={resetPasswordSuccess}
+          enableForgotPassword={configs['ui.enableForgotPassword'] !== 'false'}
         />
         {/* 如果不是强制认证（比如访客模式点击登录），显示返回按钮 */}
         {!isAuthenticated && (
@@ -3514,43 +3515,24 @@ function App() {
                 </DialogTitle>
                 <DialogContent>
                   <DialogContentText sx={{ mb: 2 }}>管理全站配置</DialogContentText>
-                  <Stack spacing={2}>
-                    <TextField
-                      margin='dense'
-                      id='site-title'
-                      name='site.title'
-                      label='网站标题 (浏览器标签)'
-                      type='text'
-                      fullWidth
-                      variant='outlined'
-                      value={tempConfigs['site.title']}
-                      onChange={handleConfigInputChange}
-                    />
-                    <TextField
-                      margin='dense'
-                      id='site-name'
-                      name='site.name'
-                      label='网站名称 (显示在页面中)'
-                      type='text'
-                      fullWidth
-                      variant='outlined'
-                      value={tempConfigs['site.name']}
-                      onChange={handleConfigInputChange}
-                    />
-
-                    {/* UI Style Toggle */}
-                    <Box sx={{ mb: 1, mt: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2
+                  }}>
+                    {/* Forgot Password Toggle */}
+                    <Box sx={{ mb: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
                       <Typography variant='subtitle1' gutterBottom>
-                        界面风格
+                        登录设置
                       </Typography>
                       <FormControlLabel
                         control={
                           <Switch
-                            checked={tempConfigs['ui.style'] !== 'classic'} // Default to modern if undefined or 'modern'
+                            checked={tempConfigs['ui.enableForgotPassword'] !== 'false'}
                             onChange={(e) =>
                               setTempConfigs({
                                 ...tempConfigs,
-                                'ui.style': e.target.checked ? 'modern' : 'classic',
+                                'ui.enableForgotPassword': e.target.checked ? 'true' : 'false',
                               })
                             }
                             color='primary'
@@ -3558,136 +3540,35 @@ function App() {
                         }
                         label={
                           <Box>
-                            <Typography variant='body1'>
-                              {tempConfigs['ui.style'] === 'classic' ? '经典模式' : '现代模式 (Glassmorphism)'}
-                            </Typography>
+                            <Typography variant='body1'>启用忘记密码功能</Typography>
                             <Typography variant='caption' color='text.secondary'>
-                              {tempConfigs['ui.style'] === 'classic'
-                                ? '使用传统的卡片样式和背景图片'
-                                : '使用毛玻璃特效和动态渐变背景'}
+                              关闭后，登录界面将不再显示“忘记密码”链接
                             </Typography>
                           </Box>
                         }
                       />
                     </Box>
-                    {/* 获取图标API设置项 */}
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant='subtitle1' gutterBottom>
-                        获取图标API设置
-                      </Typography>
-                      <TextField
-                        margin='dense'
-                        id='site-icon-api'
-                        name='site.iconApi'
-                        label='获取图标API URL'
-                        type='text'
-                        fullWidth
-                        variant='outlined'
-                        value={tempConfigs['site.iconApi']}
-                        onChange={handleConfigInputChange}
-                        placeholder='https://example.com/favicon/{domain}'
-                        helperText='输入获取图标API的地址，使用 {domain} 作为域名占位符'
-                      />
-                    </Box>
-                    {/* 新增背景图片设置 */}
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant='subtitle1' gutterBottom>
-                        背景图片设置
-                      </Typography>
-                      <TextField
-                        margin='dense'
-                        id='site-background-image'
-                        name='site.backgroundImage'
-                        label='背景图片URL'
-                        type='url'
-                        fullWidth
-                        variant='outlined'
-                        value={tempConfigs['site.backgroundImage']}
-                        onChange={handleConfigInputChange}
-                        placeholder='https://example.com/background.jpg'
-                        helperText='输入图片URL，留空则不使用背景图片'
-                      />
 
-                      <Box sx={{ mt: 2, mb: 1 }}>
-                        <Typography
-                          variant='body2'
-                          color='text.secondary'
-                          id='background-opacity-slider'
-                          gutterBottom
-                        >
-                          背景蒙版透明度: {Number(tempConfigs['site.backgroundOpacity']).toFixed(2)}
-                        </Typography>
-                        <Slider
-                          aria-labelledby='background-opacity-slider'
-                          name='site.backgroundOpacity'
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          valueLabelDisplay='auto'
-                          value={Number(tempConfigs['site.backgroundOpacity'])}
-                          onChange={(_, value) => {
-                            setTempConfigs({
-                              ...tempConfigs,
-                              'site.backgroundOpacity': String(value),
-                            });
-                          }}
-                        />
-                        <Typography variant='caption' color='text.secondary'>
-                          值越大，背景图片越清晰，内容可能越难看清
-                        </Typography>
-                      </Box>
+                    {/* Placeholder for future features */}
+                    <Box sx={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      height: 100,
+                      color: 'text.secondary',
+                      flexDirection: 'column',
+                      gap: 1
+                    }}>
+                      <Typography variant="body2">更多高级管理功能即将上线...</Typography>
                     </Box>
-                    {/* 搜索框功能设置 */}
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant='subtitle1' gutterBottom>
-                        搜索框功能设置
-                      </Typography>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={tempConfigs['site.searchBoxEnabled'] === 'true'}
-                            onChange={(e) =>
-                              setTempConfigs({
-                                ...tempConfigs,
-                                'site.searchBoxEnabled': e.target.checked ? 'true' : 'false',
-                              })
-                            }
-                            color='primary'
-                          />
-                        }
-                        label={
-                          <Box>
-                            <Typography variant='body1'>启用搜索框</Typography>
-                            <Typography variant='caption' color='text.secondary'>
-                              控制是否在页面中显示搜索框功能
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </Box>
-                    <TextField
-                      margin='dense'
-                      id='site-custom-css'
-                      name='site.customCss'
-                      label='自定义CSS'
-                      type='text'
-                      fullWidth
-                      multiline
-                      rows={6}
-                      variant='outlined'
-                      value={tempConfigs['site.customCss']}
-                      onChange={handleConfigInputChange}
-                      placeholder='/* 自定义样式 */\nbody { }'
-                    />
-
-                  </Stack>
+                  </Box>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3 }}>
                   <Button onClick={handleCloseAdminConfig} variant='outlined'>
                     取消
                   </Button>
-                  <Button onClick={handleSaveAdminConfig} variant='contained' color='primary'>
-                    保存设置
+                  <Button onClick={handleSaveAdminConfig} variant='contained' color="primary">
+                    保存
                   </Button>
                 </DialogActions>
               </Dialog>
