@@ -883,7 +883,7 @@ function App() {
         const cachedData = loadFromCache(CACHE_DATA_KEY);
         if (cachedData) {
           console.log('[Init] 预加载本地缓存数据 (Silent)');
-          setGroups(cachedData);
+          setGroups([...cachedData].sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0)));
         }
 
         // 初始设为加载中，保持 Skeleton 稳定
@@ -899,8 +899,10 @@ function App() {
         await checkAuthStatus();
         await fetchConfigs();
 
-        // 3. 确定最终的业务数据（不管缓存是否命中，都要进行一次正式获取以确保 SWR 最终一致）
-        await fetchData(false);
+        // 3. 仅在已认证时加载业务数据（访客不加载，显示 VisitorHome）
+        if (api.isAuthenticated) {
+          await fetchData(false);
+        }
 
         // 4. 全部准备就绪后，标记初次数据加载完成，开启栅栏
         setIsInitialDataLoaded(true);
@@ -1095,11 +1097,16 @@ function App() {
 
       // 获取所有分组和站点数据
       const groupsWithSites = await api.getGroupsWithSites();
-      setGroups(groupsWithSites);
+      // 确保按 order_num 排序，保持前端与数据库一致
+      const sortedGroups = [...groupsWithSites].sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+      sortedGroups.forEach(g => {
+        if (g.sites) g.sites.sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0));
+      });
+      setGroups(sortedGroups);
 
-      // 仅在已认证时缓存数据（防止访客公开数据被缓存导致退出后仍显示用户界面）
-      if (isAuthenticated && groupsWithSites && groupsWithSites.length > 0) {
-        saveToCache(CACHE_DATA_KEY, groupsWithSites);
+      // 仅在已认证时缓存排序后的数据（防止访客公开数据被缓存导致退出后仍显示用户界面）
+      if (isAuthenticated && sortedGroups && sortedGroups.length > 0) {
+        saveToCache(CACHE_DATA_KEY, sortedGroups);
         saveToCache(CACHE_CONFIG_KEY, userConfigs);
       }
     } catch (error) {
@@ -2073,13 +2080,31 @@ function App() {
       let sitesSkipped = initialSitesSkipped;
       let processed = initialProcessed;
 
-      // 本地查重副本
-      let workingGroups = [...groups];
+      // 直接从数据库获取最新分组数据（不依赖闭包中的 groups，避免 useCallback 闭包过期问题）
+      const freshGroups = await api.getGroupsWithSites();
+      let workingGroups = [...freshGroups].sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+      // === 修复 order_num 重复问题 ===
+      // 先将所有现有分组的 order_num 重新编号为连续递增值（0, 1, 2, ...）
+      // 防止因历史数据 order_num 重复导致排序不稳定
+      if (workingGroups.length > 0) {
+        const groupOrders = workingGroups.map((g, index) => ({
+          id: g.id as number,
+          order_num: index,
+        }));
+        // 更新本地副本
+        workingGroups = workingGroups.map((g, index) => ({ ...g, order_num: index }));
+        // 持久化到数据库
+        try {
+          await api.updateGroupOrder(groupOrders);
+          console.log('[Import] 已重新编号现有分组 order_num:', workingGroups.map(g => `${g.name}(order=${g.order_num})`));
+        } catch (e) {
+          console.warn('[Import] 重新编号 order_num 失败:', e);
+        }
+      }
 
-      // 计算新分组的起始 order_num
-      let nextGroupOrder = workingGroups.length > 0
-        ? Math.max(...workingGroups.map(g => g.order_num)) + 1
-        : 0;
+      // 新分组的 order_num 从现有分组数量开始递增
+      let nextGroupOrder = workingGroups.length;
+      console.log('[Import Debug] nextGroupOrder 起始值:', nextGroupOrder);
 
       // 从 startGroupIndex 开始遍历（断点续传）
       for (let gi = startGroupIndex; gi < bookmarkGroups.length; gi++) {
@@ -2109,6 +2134,11 @@ function App() {
               return;
             }
 
+            // 步骤 1: 先乐观更新 UI（让用户立即看到新分组）
+            const tempGroupData = { id: -Date.now(), name: groupName.trim(), order_num: nextGroupOrder, is_public: 1, sites: [] } as any;
+            setGroups(prev => [...prev, tempGroupData]);
+
+            // 步骤 2: 写入数据库
             const newGroup = await api.createGroup({
               name: groupName.trim(),
               order_num: nextGroupOrder++,
@@ -2117,10 +2147,11 @@ function App() {
             targetGroup = { ...newGroup, sites: [] } as GroupWithSites;
             workingGroups = [...workingGroups, targetGroup];
             groupsCreated++;
+            console.log(`[Import Debug] 创建分组 "${groupName}" order_num=${newGroup.order_num}, id=${newGroup.id}`);
 
-            // ✅ 实时显示新分组（追加到末尾，保持导入顺序）
+            // 步骤 3: 用数据库返回的真实数据（含真实 ID）替换乐观数据，并同步缓存
             setGroups(prev => {
-              const updated = [...prev, targetGroup!];
+              const updated = prev.map(g => g.id === tempGroupData.id ? targetGroup! : g);
               saveToCache(CACHE_DATA_KEY, updated);
               return updated;
             });
@@ -2177,6 +2208,15 @@ function App() {
 
           if (sitesToImport.length > 0) {
             try {
+              // 步骤 1: 先乐观更新 UI（让用户立即看到新站点）
+              setGroups(prev => prev.map(g => {
+                if (g.id === currentTargetGroupId) {
+                  return { ...g, sites: [...(g.sites || []), ...sitesToImport as any[]] };
+                }
+                return g;
+              }));
+
+              // 步骤 2: 写入数据库
               const batchResult = await api.importData({
                 groups: [{
                   id: currentTargetGroupId as number,
@@ -2193,18 +2233,6 @@ function App() {
               if (batchResult.success && batchResult.stats) {
                 sitesCreated += batchResult.stats.sites.created;
                 sitesSkipped += batchResult.stats.sites.skipped;
-
-                // ✅ 实时显示新增站点（追加到末尾，保持导入顺序）
-                setGroups(prev => {
-                  const updated = prev.map(g => {
-                    if (g.id === currentTargetGroupId) {
-                      return { ...g, sites: [...(g.sites || []), ...sitesToImport as any[]] };
-                    }
-                    return g;
-                  });
-                  saveToCache(CACHE_DATA_KEY, updated);
-                  return updated;
-                });
               }
             } catch (error) {
               console.error(`[Import] 批量导入失败:`, error);
@@ -2239,6 +2267,25 @@ function App() {
 
           // 释放主线程
           await new Promise(resolve => setTimeout(resolve, 30));
+        }
+
+        // 步骤 3: 当前分组所有批次完成后，从数据库同步真实数据到缓存
+        // 这确保缓存中的站点有真实 ID，与数据库完全一致
+        const latestData = await api.getGroupsWithSites();
+        if (latestData && latestData.length > 0) {
+          // 按 order_num 排序，确保与数据库顺序一致
+          const sorted = [...latestData].sort((a, b) => (a.order_num || 0) - (b.order_num || 0));
+          sorted.forEach(g => {
+            if (g.sites) g.sites.sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0));
+          });
+          setGroups(sorted);
+          saveToCache(CACHE_DATA_KEY, sorted);
+          // 同步 workingGroups 以便下一个分组查重准确
+          workingGroups = sorted;
+          // 重新计算 nextGroupOrder
+          nextGroupOrder = Math.max(...sorted.map(g => g.order_num)) + 1;
+          console.log('[Import Debug] DB同步后分组顺序:', sorted.map(g => `${g.name}(order=${g.order_num})`));
+          console.log('[Import Debug] nextGroupOrder 更新为:', nextGroupOrder);
         }
       }
 
