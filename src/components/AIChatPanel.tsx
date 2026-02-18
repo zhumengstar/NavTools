@@ -112,11 +112,12 @@ interface AIChatPanelProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     api: any;
     username: string;
+    avatarUrl?: string | null;
     groups: any[];
     onAddSite: (site: any) => Promise<boolean>;
 }
 
-const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, groups, onAddSite }) => {
+const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, groups, onAddSite }) => {
     const theme = useTheme();
     const [open, setOpen] = useState(false);
 
@@ -326,12 +327,12 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, groups, onAddS
                     ]);
                 }
             }
-        } catch {
+        } catch (error: any) {
             setMessages((prev) => [
                 ...prev,
                 {
                     role: 'assistant',
-                    content: '网络错误，请检查连接后重试。',
+                    content: error.message || '网络错误，请检查连接后重试。',
                 },
             ]);
         } finally {
@@ -585,6 +586,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, groups, onAddS
                                     }}
                                 >
                                     <Avatar
+                                        src={msg.role === 'user' ? (avatarUrl || undefined) : undefined}
                                         sx={{
                                             width: 30,
                                             height: 30,

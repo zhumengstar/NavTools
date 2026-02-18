@@ -1603,6 +1603,25 @@ export default {
                         // 模型配置 - 切换模型时只需修改这里
                         const selectedModel = body.model || '@cf/zai-org/glm-4.7-flash';
 
+                        // --- 额度查验与重置系统 ---
+                        // 如果未启用认证且由访客访问，我们默认根据 IP 或 ID=1 进行限制 (此处按 ID=1 处理)
+                        const userIdForQuota = currentUserId || 1;
+                        const quotaCheck = await api.checkAndResetQuota(userIdForQuota);
+
+                        if (!quotaCheck.allowed) {
+                            return createJsonResponse(
+                                {
+                                    success: false,
+                                    message: '您今日的 AI 咨询额度已用完，请明天再来。☕'
+                                },
+                                request,
+                                { status: 429 }
+                            );
+                        }
+
+                        // 执行计数增加
+                        await api.incrementQuota(userIdForQuota);
+
                         // 辅助函数：根据模型ID获取上下文窗口大小（估算值）
                         const getContextWindow = (modelId: string): number => {
                             const lowerId = modelId.toLowerCase();

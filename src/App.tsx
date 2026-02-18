@@ -3467,6 +3467,7 @@ function App() {
                 <AIChatPanel
                   api={api}
                   username={username}
+                  avatarUrl={avatarUrl}
                   groups={groups}
                   onAddSite={async (site) => {
                     const targetGroup = groups.find(g => g.id === site.groupId);

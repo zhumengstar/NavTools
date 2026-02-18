@@ -345,6 +345,20 @@ export class NavigationAPI {
       // 字段可能已存在，忽略错误
     }
 
+    // 数据库迁移：创建 user_quotas 表
+    try {
+      await this.db.exec(`CREATE TABLE IF NOT EXISTS user_quotas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE NOT NULL,
+        usage_count INTEGER DEFAULT 0,
+        last_reset_date TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );`);
+      console.log('Migrated: Created user_quotas table');
+    } catch (e) {
+      console.error('Failed to create user_quotas table:', e);
+    }
+
     // 初始化默认数据 (仅当从未初始化数据时)
     try {
       const isDataInitialized = await this.getConfig('DATA_INITIALIZED');
@@ -1813,6 +1827,64 @@ export class NavigationAPI {
       return domain ? `https://www.faviconextractor.com/favicon/${domain}` : '';
     } catch {
       return '';
+    }
+  }
+
+  // AI 额度管理：检查并重置额度
+  async checkAndResetQuota(userId: number, limit: number = 20): Promise<{ allowed: boolean; remaining: number; reset: boolean }> {
+    if (!this.db) return { allowed: true, remaining: 999, reset: false };
+
+    // 获取当前日期 (YYYY-MM-DD), 使用 UTC+8 (北京时间)
+    const now = new Date();
+    const offset = 8 * 60; // UTC+8
+    const beijingTime = new Date(now.getTime() + (now.getTimezoneOffset() + offset) * 60000);
+    const today = beijingTime.toISOString().split('T')[0];
+
+    try {
+      let quota = await this.db
+        .prepare('SELECT usage_count, last_reset_date FROM user_quotas WHERE user_id = ?')
+        .bind(userId)
+        .first<{ usage_count: number; last_reset_date: string }>();
+
+      if (!quota) {
+        // 初始额度记录
+        await this.db
+          .prepare('INSERT INTO user_quotas (user_id, usage_count, last_reset_date) VALUES (?, ?, ?)')
+          .bind(userId, 0, today)
+          .run();
+        return { allowed: true, remaining: limit, reset: true };
+      }
+
+      if (quota.last_reset_date !== today) {
+        // 日期不一致，重置额度
+        await this.db
+          .prepare('UPDATE user_quotas SET usage_count = 0, last_reset_date = ? WHERE user_id = ?')
+          .bind(today, userId)
+          .run();
+        return { allowed: true, remaining: limit, reset: true };
+      }
+
+      return {
+        allowed: quota.usage_count < limit,
+        remaining: Math.max(0, limit - quota.usage_count),
+        reset: false
+      };
+    } catch (e) {
+      console.error('Quota check failed:', e);
+      return { allowed: true, remaining: 0, reset: false }; // 报错时默认允许以确保不影响主流程，但记录错误
+    }
+  }
+
+  // 增加 AI 使用计数
+  async incrementQuota(userId: number): Promise<void> {
+    if (!this.db) return;
+    try {
+      await this.db
+        .prepare('UPDATE user_quotas SET usage_count = usage_count + 1 WHERE user_id = ?')
+        .bind(userId)
+        .run();
+    } catch (e) {
+      console.error('Failed to increment quota:', e);
     }
   }
 }
