@@ -2186,6 +2186,28 @@ function App() {
               if (batchResult.success) {
                 sitesCreated += sitesToImport.length;
                 console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次导入成功 (${sitesToImport.length} 个书签)`);
+
+                // --- 视觉优化：局部状态乐观追加 ---
+                const sitesAdded = sitesToImport as any[];
+
+                setGroups(prevGroups => {
+                  const updatedGroups = prevGroups.map(g => {
+                    if (g.id === targetGroup!.id) {
+                      return {
+                        ...g,
+                        sites: [...(g.sites || []), ...sitesAdded]
+                      };
+                    }
+                    return g;
+                  });
+
+                  // 关键细节：同步更新外部 workingGroups，确保后续循环拿到最新 site 列表
+                  workingGroups = updatedGroups;
+                  return updatedGroups;
+                });
+
+                // 暂时放开渐进式渲染限制
+                setVisibleGroupsCount(prev => Math.max(prev, workingGroups.length));
               }
             } catch (error) {
               console.error(`[Import] 批量导入批次失败:`, error);
@@ -2196,10 +2218,8 @@ function App() {
 
           processed += currentChunk.length;
 
-          // 更新 UI 状态
-          if (sitesToImport.length > 0) {
-            await fetchData(true); // 批量静默同步
-          }
+          // 核心：不再在分批中途执行 fetchData(true)，防止 API 快照回滚导致的数值跳动
+          // 我们依赖上面的 setGroups 局部更新来维持 UI 的最新状态
 
           const progress = totalBookmarks > 0 ? Math.round((sitesCreated / totalBookmarks) * 100) : 0;
           setChromeImportProgress(progress);
