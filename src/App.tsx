@@ -831,8 +831,10 @@ function App() {
     }
   };
 
-  // 加载配置
   const fetchConfigs = useCallback(async () => {
+    // 核心加固：如果未认证，严禁获取配置
+    if (!api.isAuthenticated) return;
+
     try {
       const configsData = await api.getConfigs();
       const finalConfigs = {
@@ -853,25 +855,35 @@ function App() {
 
   // 登出功能
   const handleLogout = useCallback(async () => {
-    // 强制取消正在进行的导入任务
+    // 1. 强制终止正在进行的导入任务循环
     isImportCancelled.current = true;
+    if (typeof (window as any).isImportCancelled !== 'undefined') {
+      (window as any).isImportCancelled = true;
+    }
+
+    // 2. 彻底清除状态并拦截后续副作用
     setImportLoading(false);
     setChromeImportProgress(0);
     clearImportTask();
+    setLoading(false);
+    setIsAuthChecking(false);
+    setIsInitialDataLoaded(true);
 
     await api.logout();
+
     setIsAuthenticated(false);
     setUsername('User');
     setAvatarUrl(null);
     setIsAdmin(false);
-
     setViewMode('readonly');
-
-    // 登出后清空所有缓存和数据
     setGroups([]);
+
+    // 清空缓存
     localStorage.removeItem(CACHE_DATA_KEY);
     localStorage.removeItem(CACHE_PROFILE_KEY);
     localStorage.removeItem(CACHE_CONFIG_KEY);
+
+    // 仅重新加载访客配置（受鉴权拦截保护）
     await fetchConfigs();
   }, [api, fetchConfigs]);
 
@@ -1119,6 +1131,9 @@ function App() {
 
 
   const fetchData = useCallback(async (silent = false) => {
+    // 核心加固：如果未认证，严禁获取业务数据
+    if (!api.isAuthenticated) return;
+
     try {
       // 只有在完全没有数据（缓存也没）时且非静默加载才展示 loading
       if (!silent && groups.length === 0) {
@@ -2709,7 +2724,7 @@ function App() {
             <ActiveLayout
               title={configs['site.name'] || ''}
               configs={configs}
-              bookmarkCount={isInitialDataLoaded ? totalBookmarkCount : undefined}
+              bookmarkCount={(isInitialDataLoaded && isAuthenticated) ? totalBookmarkCount : undefined}
               headerContent={
                 <Stack
                   direction='row'
@@ -2831,7 +2846,7 @@ function App() {
             >
               {(isAuthChecking && groups.length === 0) ? (
                 <PageSkeleton />
-              ) : (!isAuthenticated && groups.length === 0 && isInitialDataLoaded) ? (
+              ) : (!isAuthenticated) ? (
                 <Suspense fallback={<PageSkeleton />}>
                   <VisitorHome
                     api={api}

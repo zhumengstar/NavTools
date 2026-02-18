@@ -135,7 +135,7 @@ const ClassicLayout: React.FC<Props> = ({ children, headerContent, title, config
                         }}
                     >
                         {title}
-                        {bookmarkCount > 0 && (
+                        {bookmarkCount && bookmarkCount > 0 && (
                             <Box component="span" sx={{
                                 ml: 2,
                                 display: 'inline-flex',

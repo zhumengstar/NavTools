@@ -81,7 +81,7 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 }}
                             >
                                 {title}
-                                {bookmarkCount > 0 && (
+                                {bookmarkCount !== undefined && bookmarkCount > 0 && (
                                     <Box component="span" sx={{
                                         ml: 1.5,
                                         px: 1,
@@ -124,7 +124,7 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 }}
                             >
                                 {title}
-                                {bookmarkCount > 0 && (
+                                {bookmarkCount !== undefined && bookmarkCount > 0 && (
                                     <Box component="span" sx={{
                                         ml: 1,
                                         px: 0.8,
