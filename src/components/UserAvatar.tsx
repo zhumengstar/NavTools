@@ -444,6 +444,14 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                     </Box>
                 </Box>
                 <Divider />
+                {isAdmin && (
+                    <MenuItem onClick={() => { handleMenuClose(); onOpenConfig(); }} sx={menuItemSx}>
+                        <ListItemIcon>
+                            <SettingsIcon fontSize='small' />
+                        </ListItemIcon>
+                        <ListItemText>网站管理</ListItemText>
+                    </MenuItem>
+                )}
                 <MenuItem onClick={handleInfoOpen} sx={menuItemSx}>
                     <ListItemIcon>
                         <InfoOutlinedIcon fontSize='small' />
