@@ -477,6 +477,8 @@ function App() {
   const [importLoading, setImportLoading] = useState(false);
   const [importType, setImportType] = useState<'json' | 'chrome'>('json');
   const [chromeImportProgress, setChromeImportProgress] = useState(0);
+  const [importStartTime, setImportStartTime] = useState<number | null>(null);
+  const [importRemainingSeconds, setImportRemainingSeconds] = useState<number | null>(null);
 
   // 全局折叠/展开指令转换版本
   const [globalToggleVersion, setGlobalToggleVersion] = useState<{ type: 'expand' | 'collapse', ts: number } | undefined>(undefined);
@@ -1870,6 +1872,8 @@ function App() {
     setImportError(null);
     setImportType('json');
     setChromeImportProgress(0);
+    setImportRemainingSeconds(null);
+    setImportStartTime(null);
     setOpenImport(true);
   }, []);
 
@@ -1990,6 +1994,8 @@ function App() {
       setImportLoading(true);
       setImportError(null);
       setChromeImportProgress(0);
+      setImportRemainingSeconds(null);
+      setImportStartTime(Date.now());
 
       // --- 第一阶段：文件分析 ---
       setSnackbarMessage('正在分析书签文件...');
@@ -2224,6 +2230,18 @@ function App() {
           const progress = totalBookmarks > 0 ? Math.round((sitesCreated / totalBookmarks) * 100) : 0;
           setChromeImportProgress(progress);
 
+          // 计算预计剩余时间
+          if (importStartTime && (sitesCreated + sitesSkipped) > 0) {
+            const elapsed = (Date.now() - importStartTime) / 1000;
+            const itemsProcessed = sitesCreated + sitesSkipped;
+            const itemsRemaining = totalBookmarks - itemsProcessed;
+            const speed = itemsProcessed / elapsed; // items per second
+            if (speed > 0) {
+              const remaining = Math.round(itemsRemaining / speed);
+              setImportRemainingSeconds(remaining);
+            }
+          }
+
           // 每批次强制持久化一次
           saveImportTask({
             type: 'chrome',
@@ -2241,16 +2259,34 @@ function App() {
         } // chunks loop end
       } // outer loop end
 
+      // --- 最终统计：基于实际状态重新计算 ---
+      const finalGroups = workingGroups;
+      let finalTotalSites = 0;
+      finalGroups.forEach(g => { finalTotalSites += (g.sites || []).length; });
+
+      // 获取初始总站点数（基于最初入参前的快照）
+      // 注意：由于 workingGroups 是基于 groups 初始化的，我们可以对比最初的 groups
+      let initialTotalSites = 0;
+      groups.forEach(g => { initialTotalSites += (g.sites || []).length; });
+
+      // 实际新增量 = 当前总数 - 初始总数
+      const actualSitesCreated = Math.max(0, finalTotalSites - initialTotalSites);
+      const actualSitesSkipped = Math.max(0, totalBookmarks - actualSitesCreated);
+
       // 完成后清理
       const summary = [
         `Chrome 书签导入完成！`,
         `分组：发现${bookmarkGroups.length}个，新建${groupsCreated}个，合并${groupsMerged}个`,
-        `书签：共${totalBookmarks}个，新建${sitesCreated}个，跳过${sitesSkipped}个`,
+        `书签：共${totalBookmarks}个，实际新增${actualSitesCreated}个，跳过${actualSitesSkipped}个`,
       ].join('\n');
 
       setImportResultMessage(summary);
       setImportResultOpen(true);
       clearImportTask();
+
+      // 完成后撤销计时器
+      setImportRemainingSeconds(null);
+      setImportStartTime(null);
 
       // 完成后执行无缓存同步
       await fetchData(false);
@@ -2259,6 +2295,8 @@ function App() {
     } finally {
       setImportLoading(false);
       setChromeImportProgress(0);
+      setImportRemainingSeconds(null);
+      setImportStartTime(null);
     }
   };
 
@@ -2537,7 +2575,14 @@ function App() {
                     正在执行导入任务...
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {importType === 'chrome' ? `${chromeImportProgress}%` : '后台处理中'}
+                    {importType === 'chrome' ? (
+                      <>
+                        {importRemainingSeconds !== null && importRemainingSeconds > 0 && (
+                          <span style={{ marginRight: 8 }}>预计还需 {importRemainingSeconds} 秒</span>
+                        )}
+                        {chromeImportProgress}%
+                      </>
+                    ) : '后台处理中'}
                   </Typography>
                 </Box>
                 {importType === 'chrome' && (
@@ -3381,8 +3426,11 @@ function App() {
                         <Box sx={{ width: '100%', mr: 1 }}>
                           <LinearProgress variant='determinate' value={chromeImportProgress} />
                         </Box>
-                        <Typography variant='body2' color='text.secondary' sx={{ minWidth: 40 }}>
-                          {chromeImportProgress}%
+                        <Typography variant='body2' color='text.secondary' sx={{ minWidth: 40, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {importRemainingSeconds !== null && importRemainingSeconds > 0 && (
+                            <span style={{ fontSize: '0.75rem', color: 'rgba(0,0,0,0.5)' }}>约 {importRemainingSeconds} 秒</span>
+                          )}
+                          <span>{chromeImportProgress}%</span>
                         </Typography>
                       </Box>
                     </Box>
