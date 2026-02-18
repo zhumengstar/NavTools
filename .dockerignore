@@ -1,0 +1,9 @@
+# Dockerignore
+node_modules
+dist
+.git
+.github
+.wrangler
+.idea
+.vscode
+*.log

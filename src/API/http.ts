@@ -1208,7 +1208,7 @@ export class NavigationAPI {
       FROM sites s
       JOIN groups g ON s.group_id = g.id
       JOIN users u ON g.user_id = u.id
-      WHERE s.is_public = 1 AND g.is_public = 1 AND s.is_featured = 1
+      WHERE s.is_public = 1 AND g.is_public = 1 AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
       ORDER BY RANDOM()
       LIMIT ?
     `;

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  navtools:
+    container_name: navtools
+    image: navtools
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      # Data persistence for SQLite (D1) and KV
+      - ./.wrangler:/app/.wrangler
+    environment:
+      - WRANGLER_SEND_METRICS=false
+      # Set to "true" for the first time to initialize the database, then you can set it to "false"
+      - INIT_DB=true
+    tty: true
+    stdin_open: true
+    restart: unless-stopped

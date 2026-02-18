@@ -1,0 +1,1 @@
+/root/.config/.wrangler/logs/wrangler-2026-02-18_07-47-26_023.log

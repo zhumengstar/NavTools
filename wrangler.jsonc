@@ -12,14 +12,11 @@
         "no_handle_cross_request_promise_resolution"
     ], // 必须启用 Node.js 兼容
     "assets": {
+        "directory": "dist/client",
         "not_found_handling": "single-page-application"
     },
     "observability": {
         "enabled": false
-    },
-    // Workers AI 绑定
-    "ai": {
-        "binding": "AI"
     },
     // D1数据库绑定
     "d1_databases": [

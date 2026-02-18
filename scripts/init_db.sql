@@ -6,6 +6,10 @@ CREATE TABLE IF NOT EXISTS groups (
     name TEXT NOT NULL,
     order_num INTEGER NOT NULL,
     is_public INTEGER DEFAULT 1,
+    user_id INTEGER NOT NULL DEFAULT 1,
+    is_protected INTEGER DEFAULT 0,
+    is_deleted INTEGER DEFAULT 0,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -61,7 +65,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 默认管理员账号 (密码: password)
 -- 注意：实际部署时请修改密码
-INSERT OR IGNORE INTO users (username, password_hash, role) VALUES ('admin', '$2y$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG', 'admin');
+INSERT OR IGNORE INTO users (username, password_hash, email, role, avatar_url) 
+VALUES ('admin', '$2y$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG', 'admin@example.com', 'admin', 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin');
 
 -- 设置初始化标志
 INSERT OR IGNORE INTO configs (key, value, user_id) VALUES ('DB_INITIALIZED', 'true', 1);
