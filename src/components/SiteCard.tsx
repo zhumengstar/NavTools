@@ -53,7 +53,7 @@ const SiteCard = memo(function SiteCard({
   const [iconError, setIconError] = useState(!site.icon);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  // 当 site.icon 更新时，重置错误状态，确保新图标能尝试加载
+  // 当 site.icon 真正改变时，重置错误状态和加载状态
   useEffect(() => {
     setIconError(!site.icon);
     setImageLoaded(false);
@@ -61,7 +61,7 @@ const SiteCard = memo(function SiteCard({
 
   // 使用dnd-kit的useSortable hook
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `site-${site.id || index}`,
+    id: `site-${site.id}`, // 使用稳定的 id
     disabled: !isEditMode || isBatchMode, // 批量模式下禁用拖拽
   });
 
@@ -129,11 +129,12 @@ const SiteCard = memo(function SiteCard({
       <Card
         sx={{
           height: '100%',
+          minHeight: { xs: 100, sm: 110 }, // 设置固定的最小高度
           position: 'relative', // 确保绝对定位子元素参考此处
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 3,
-          transition: 'box-shadow 0.3s ease-in-out',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           border: '1px solid',
           borderColor: 'divider',
           boxShadow: isDragging ? 8 : 2,
@@ -166,31 +167,21 @@ const SiteCard = memo(function SiteCard({
             <Box display='flex' alignItems='center' mb={1}>
               {!iconError && site.icon ? (
                 <Box sx={{ position: 'relative', mr: 1.5, width: 32, height: 32, flexShrink: 0, display: 'flex' }}>
-                  <Skeleton
-                    variant='rounded'
-                    width={32}
-                    height={32}
+                  <Box
+                    component='img'
+                    src={site.icon}
+                    alt={site.name}
                     sx={{
-                      display: !imageLoaded ? 'block' : 'none',
-                      position: 'absolute',
+                      width: 32,
+                      height: 32,
                       borderRadius: 1,
+                      objectFit: 'cover',
+                      // 在编辑模式下不显示骨架屏和淡入效果，以保持拖拽时的图标稳定
+                      opacity: imageLoaded ? 1 : (isEditMode ? 1 : 0),
                     }}
+                    onError={handleIconError}
+                    onLoad={handleImageLoad}
                   />
-                  <Fade in={imageLoaded} timeout={300}>
-                    <Box
-                      component='img'
-                      src={site.icon}
-                      alt={site.name}
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 1,
-                        objectFit: 'cover',
-                      }}
-                      onError={handleIconError}
-                      onLoad={handleImageLoad}
-                    />
-                  </Fade>
                 </Box>
               ) : (
                 <Box
@@ -304,6 +295,7 @@ const SiteCard = memo(function SiteCard({
                   overflow: 'hidden',
                   flexGrow: 1,
                   fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                  minHeight: { xs: '2.4em', sm: '3em' }, // 确保描述区域即使为空也占用空间
                 }}
               >
                 {site.description || '暂无描述'}
@@ -357,31 +349,20 @@ const SiteCard = memo(function SiteCard({
                 <Box display='flex' alignItems='center' mb={1}>
                   {!iconError && site.icon ? (
                     <Box sx={{ position: 'relative', mr: 1.5, width: 32, height: 32, flexShrink: 0, display: 'flex' }}>
-                      <Skeleton
-                        variant='rounded'
-                        width={32}
-                        height={32}
+                      <Box
+                        component='img'
+                        src={site.icon}
+                        alt={site.name}
                         sx={{
-                          display: !imageLoaded ? 'block' : 'none',
-                          position: 'absolute',
+                          width: 32,
+                          height: 32,
                           borderRadius: 1,
+                          objectFit: 'cover',
+                          opacity: imageLoaded ? 1 : 0.5, // 初始加载时显示一半透明度而非完全隐藏或占位
                         }}
+                        onError={handleIconError}
+                        onLoad={handleImageLoad}
                       />
-                      <Fade in={imageLoaded} timeout={300}>
-                        <Box
-                          component='img'
-                          src={site.icon}
-                          alt={site.name}
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 1,
-                            objectFit: 'cover',
-                          }}
-                          onError={handleIconError}
-                          onLoad={handleImageLoad}
-                        />
-                      </Fade>
                     </Box>
                   ) : (
                     <Box
@@ -494,6 +475,7 @@ const SiteCard = memo(function SiteCard({
                       overflow: 'hidden',
                       flexGrow: 1,
                       fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      minHeight: { xs: '2.4em', sm: '3em' }, // 确保描述区域即使为空也占用空间
                     }}
                   >
                     {site.description || '暂无描述'}

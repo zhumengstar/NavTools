@@ -228,6 +228,8 @@ function App() {
 
   // 新增认证状态
   const [isInitialDataLoaded, setIsInitialDataLoaded] = useState(false);
+  // 新增：标记服务器数据是否已经完成初步同步，用于锁定统计数字显示
+  const [isDataSynced, setIsDataSynced] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // 使用 ref 追踪 groups 的最新状态，避免 handleExportData 频繁更新导致 UserAvatar 重渲染
@@ -889,9 +891,27 @@ function App() {
         }
 
         const cachedData = loadFromCache(CACHE_DATA_KEY);
-        if (cachedData) {
-          console.log('[Init] 预加载本地缓存数据 (Silent)');
-          setGroups([...cachedData].sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0)));
+        if (cachedData && Array.isArray(cachedData)) {
+          console.log('[Init] 预加载本地缓存数据并过滤回收站内容 (Silent)');
+          // 应用过滤规则：彻底剔除回收站和逻辑删除内容
+          const filteredCache = cachedData
+            .filter((g: any) =>
+              // 1. 过滤掉受保护分组（回收站）
+              (Number(g.is_protected) !== 1) &&
+              // 2. 过滤掉逻辑删除的分组
+              (Number(g.is_deleted) !== 1) &&
+              !g.deleted_at
+            )
+            .map((g: any) => ({
+              ...g,
+              sites: (g.sites || []).filter((s: any) =>
+                // 3. 过滤掉逻辑删除的站点
+                Number(s.is_deleted) !== 1 && !s.deleted_at
+              )
+            }))
+            .sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0));
+
+          setGroups(filteredCache);
         }
 
         // 初始设为加载中，保持 Skeleton 稳定
@@ -909,7 +929,10 @@ function App() {
 
         // 3. 仅在已认证时加载业务数据（访客不加载，显示 VisitorHome）
         if (api.isAuthenticated) {
-          await fetchData(false);
+          await fetchData(true); // 初始同步优先使用静默模式，防止界面跳变
+          setIsDataSynced(true); // 标记实时数据已到达
+        } else {
+          setIsDataSynced(true); // 访客模式也视为“同步”完成
         }
 
         // 4. 全部准备就绪后，标记初次数据加载完成，开启栅栏
@@ -1088,10 +1111,22 @@ function App() {
     }
   }, [groups, configs, api, isAdmin]);
 
-  // 计算总书签数
+  // 计算总书签数（排除回收站/已删除项目）
   const totalBookmarkCount = useMemo(() => {
-    return groups.reduce((total, group) => total + (group.sites?.length || 0), 0);
-  }, [groups]);
+    // 栅栏控制：只有当数据已经从服务器同步（或认定同步结束）后才显示，防止显示过时的缓存数字
+    if (!isDataSynced) return null;
+
+    return groups.reduce((total, group) => {
+      // 严格过滤：排除受保护的分组（回收站）、逻辑删除的分组以及站点的删除标记
+      if (Number(group.is_protected) === 1 || Number(group.is_deleted) === 1 || group.deleted_at) {
+        return total;
+      }
+      const activeSites = group.sites?.filter(site =>
+        Number(site.is_deleted) !== 1 && !site.deleted_at
+      ) || [];
+      return total + activeSites.length;
+    }, 0);
+  }, [groups, isInitialDataLoaded]);
 
 
   const fetchData = useCallback(async (silent = false) => {
@@ -1115,9 +1150,16 @@ function App() {
       });
       setGroups(sortedGroups);
 
-      // 仅在已认证时缓存排序后的数据（防止访客公开数据被缓存导致退出后仍显示用户界面）
+      // 仅在已认证时缓存排序后的数据（进行预清洗，排除回收站和已删除项）
       if (isAuthenticated && sortedGroups && sortedGroups.length > 0) {
-        saveToCache(CACHE_DATA_KEY, sortedGroups);
+        const cleanDataForCache = sortedGroups
+          .filter((g: any) => Number(g.is_protected) !== 1 && Number(g.is_deleted) !== 1 && !g.deleted_at)
+          .map((g: any) => ({
+            ...g,
+            sites: (g.sites || []).filter((s: any) => Number(s.is_deleted) !== 1 && !s.deleted_at)
+          }));
+
+        saveToCache(CACHE_DATA_KEY, cleanDataForCache);
         saveToCache(CACHE_CONFIG_KEY, userConfigs);
       }
     } catch (error) {
@@ -1598,41 +1640,8 @@ function App() {
       const overIndex = currentGroup.sites.findIndex(s => s.id === overSiteId);
 
       if (oldIndex !== -1 && overIndex !== -1) {
-        let newIndex = overIndex;
-
-        // 使用 Rect 判断相对位置，修正 finalIndex
-        const activeRect = active.rect.current.translated;
-        const overRect = over.rect;
-
-        if (activeRect && overRect) {
-          const activeCenterY = activeRect.top + activeRect.height / 2;
-          const overCenterY = overRect.top + overRect.height / 2;
-          const activeCenterX = activeRect.left + activeRect.width / 2;
-          const overCenterX = overRect.left + overRect.height / 2; // Corrected to overRect.height / 2 for vertical center
-
-          let isAfter = false;
-          if (activeCenterY > overCenterY + overRect.height / 2) {
-            isAfter = true;
-          } else if (activeCenterY < overCenterY - overRect.height / 2) {
-            isAfter = false;
-          } else {
-            if (activeCenterX > overCenterX) isAfter = true;
-          }
-
-          // 根据拖拽方向和相对位置修正索引
-          if (oldIndex < overIndex) {
-            // 向下拖拽，默认是放在 over 后面 (Index=overIndex)
-            // 如果判断实际上是 Before (Top half)，则 -1
-            if (!isAfter) newIndex = overIndex - 1;
-          } else {
-            // 向上拖拽，默认是放在 over 前面 (Index=overIndex)
-            // 如果判断实际上是 After (Bottom half)，则 +1
-            if (isAfter) newIndex = overIndex + 1;
-          }
-        }
-
-        if (oldIndex !== newIndex) {
-          finalSites = arrayMove(currentGroup.sites, oldIndex, newIndex);
+        if (oldIndex !== overIndex) {
+          finalSites = arrayMove(currentGroup.sites, oldIndex, overIndex);
           orderChanged = true;
 
           // 更新本地状态
@@ -2792,7 +2801,7 @@ function App() {
             <ActiveLayout
               title={configs['site.name'] || ''}
               configs={configs}
-              bookmarkCount={totalBookmarkCount}
+              bookmarkCount={isInitialDataLoaded ? totalBookmarkCount : undefined}
               headerContent={
                 <Stack
                   direction='row'
