@@ -1411,6 +1411,80 @@ export default {
 
                         return createJsonResponse(result, request);
                     }
+
+                    // 获取站点信息 (标题和描述) - 支持静默模式
+                    else if (path === "utils/fetch-site-info" && method === "GET") {
+                        if (!isAuthenticated) {
+                            return createResponse("未认证", request, { status: 401 });
+                        }
+
+                        const targetUrl = url.searchParams.get("url");
+                        const isSilent = url.searchParams.get("silent") === "true";
+
+                        if (!targetUrl) {
+                            return createJsonResponse({ success: false, message: "参数 url 不能为空" }, request, { status: 400 });
+                        }
+
+                        try {
+                            let fetchResponse;
+                            if (!isSilent) console.log(`[Fetch Info] Attempting to fetch: ${targetUrl}`);
+
+                            try {
+                                fetchResponse = await fetch(targetUrl, {
+                                    headers: {
+                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+                                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                                    },
+                                    redirect: "follow",
+                                    signal: AbortSignal.timeout(5000)
+                                });
+                            } catch (fetchErr) {
+                                if (!isSilent) console.error(`[Fetch Info] Failed for ${targetUrl}:`, fetchErr);
+                                return createJsonResponse({ success: false, deadLink: true }, request);
+                            }
+
+                            if (!fetchResponse.ok) {
+                                return createJsonResponse({ success: false, deadLink: fetchResponse.status >= 400 && fetchResponse.status < 600 }, request);
+                            }
+
+                            let title = "";
+                            let description = "";
+                            let icon = "";
+
+                            const rewriter = new HTMLRewriter()
+                                .on("title", { text(t) { title += t.text; } })
+                                .on("meta[name='description'], meta[name='Description'], meta[property='og:description']", {
+                                    element(e) { if (!description) description = e.getAttribute("content") || ""; }
+                                })
+                                .on("meta[property='og:title']", {
+                                    element(e) { if (!title) title = e.getAttribute("content") || ""; }
+                                })
+                                .on("link[rel*='icon']", {
+                                    element(e) {
+                                        if (!icon) {
+                                            const href = e.getAttribute("href");
+                                            if (href) {
+                                                try { icon = new URL(href, targetUrl).toString(); } catch { icon = href; }
+                                            }
+                                        }
+                                    }
+                                });
+
+                            await rewriter.transform(fetchResponse).arrayBuffer();
+
+                            return createJsonResponse({
+                                success: true,
+                                name: title.trim().slice(0, 100),
+                                description: description.trim().slice(0, 500),
+                                icon: icon
+                            }, request);
+
+                        } catch (error) {
+                            if (!isSilent) console.error('Fetch site info failed:', error);
+                            return createJsonResponse({ success: false }, request);
+                        }
+                    }
+
                     // 批量获取书签图标
                     else if (path === "utils/batch-update-icons" && method === "POST") {
                         if (!isAuthenticated || !currentUserId) {

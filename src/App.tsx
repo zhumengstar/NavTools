@@ -1063,7 +1063,13 @@ function App() {
 
         // 只有当需要补全信息，或者是开启了自动清理死链时，才发起 fetch
         if (needsInfo || isAutoCleanEnabled) {
-          const info = await api.fetchSiteInfoDirectly(site.url);
+          // 策略：优先前端直接抓取 (零压力)
+          let info = await api.fetchSiteInfoDirectly(site.url);
+
+          // 如果前端因为跨域 (CORS) 失败，则请求后端备选接口 (静默模式，不留日志)
+          if (!info.success && !info.deadLink) {
+            info = await api.fetchSiteInfo(site.url, { silent: true });
+          }
 
           // 1. 处理死链清理 (如果开启且检测到死链)
           if (isAutoCleanEnabled && info.deadLink) {
@@ -1466,88 +1472,7 @@ function App() {
 
   }, []);
 
-  // === 后台自动补全网站信息逻辑 ===
-  useEffect(() => {
-    if (configs['site.autoCompleteInfo'] !== 'true' || !isAuthenticated) return;
-
-    let timer: any = null;
-
-    const runAutoCompleteTask = async () => {
-      try {
-        console.log('[Background] 启动网站信息后台补全任务...');
-
-        const sitesToFix: { site: Site; groupIndex: number; siteIndex: number }[] = [];
-
-        groups.forEach((group, gi) => {
-          group.sites.forEach((site, si) => {
-            const needsInfo = !site.description || !site.name || site.name.includes('://') || !site.icon;
-            if (needsInfo && site.id && !site.url.startsWith('javascript:')) {
-              sitesToFix.push({ site, groupIndex: gi, siteIndex: si });
-            }
-          });
-        });
-
-        if (sitesToFix.length === 0) {
-          console.log('[Background] 没有发现需要补全的站点');
-          return;
-        }
-
-        const batchSize = 3;
-        const currentBatch = sitesToFix.slice(0, batchSize);
-
-        console.log(`[Background] 正在处理 ${currentBatch.length}/${sitesToFix.length} 个待补全站点...`);
-
-        for (const item of currentBatch) {
-          const { site } = item;
-          try {
-            const info = await api.fetchSiteInfo(site.url);
-            let iconUrl = site.icon;
-            if (!iconUrl) {
-              const domain = extractDomain(site.url);
-              if (domain) {
-                const iconApi = configs['site.iconApi'] || 'https://www.faviconextractor.com/favicon/{domain}?larger=true';
-                iconUrl = iconApi.replace('{domain}', domain);
-              }
-            }
-
-            if (info.success || iconUrl !== site.icon) {
-              const updatedSite = {
-                ...site,
-                name: site.name && !site.name.includes('://') ? site.name : (info.name || site.name),
-                description: site.description || info.description || site.description,
-                icon: iconUrl || site.icon
-              };
-
-              if (JSON.stringify(updatedSite) !== JSON.stringify(site)) {
-                await api.updateSite(site.id!, updatedSite);
-                setGroups(prev => {
-                  const newGroups = [...prev];
-                  const g = { ...newGroups[item.groupIndex] };
-                  // Fix TS2488: Handle potential undefined sites
-                  const s = [...(g.sites || [])];
-                  s[item.siteIndex] = updatedSite;
-                  g.sites = s;
-                  // Fix TS2322: Explicitly cast to GroupWithSites to resolve type mismatch
-                  newGroups[item.groupIndex] = g as GroupWithSites;
-                  return newGroups;
-                });
-              }
-            }
-          } catch (e) {
-            console.error(`[Background] 补全站点 ${site.url} 失败:`, e);
-          }
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      } catch (err) {
-        console.error('[Background] 后台补全任务出错:', err);
-      } finally {
-        timer = setTimeout(runAutoCompleteTask, 30000);
-      }
-    };
-
-    timer = setTimeout(runAutoCompleteTask, 10000);
-    return () => { if (timer) clearTimeout(timer); };
-  }, [isAuthenticated, configs, groups, api, configs['site.iconApi']]);
+  // === 结束后台自动任务定义 ===
 
   // 处理跨分组拖拽的 DragOver 事件
   const handleSiteDragOver = (event: DragOverEvent) => {

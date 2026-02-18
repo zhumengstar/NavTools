@@ -604,16 +604,17 @@ export class NavigationClient {
     }
   }
 
-  // 获取站点元数据 (已弃用: 后端代理版本，会产生日志和超时)
-  async fetchSiteInfo(url: string): Promise<{ success: boolean; name?: string; description?: string; icon?: string; message?: string; deadLink?: boolean }> {
+  // 获取站点元数据 (后端代理版本，支持静默模式以减少日志)
+  async fetchSiteInfo(url: string, options: { silent?: boolean } = {}): Promise<{ success: boolean; name?: string; description?: string; icon?: string; message?: string; deadLink?: boolean }> {
     try {
-      return await this.request(`utils/fetch-site-info?url=${encodeURIComponent(url)}`);
+      const silentParam = options.silent ? '&silent=true' : '';
+      return await this.request(`utils/fetch-site-info?url=${encodeURIComponent(url)}${silentParam}`);
     } catch (error) {
-      console.error('获取站点信息失败:', error);
+      if (!options.silent) console.error('获取站点信息失败:', error);
       return {
         success: false,
         message: error instanceof Error ? error.message : '获取站点信息失败',
-        deadLink: true, // 网络层面的错误通常意味着不可达
+        deadLink: true,
       };
     }
   }
@@ -624,4 +625,60 @@ export class NavigationClient {
     });
     return response;
   }
+}
+
+/**
+ * 模拟客户端，用于前端开发和测试
+ */
+export class MockNavigationClient {
+  public isAuthenticated: boolean = true;
+  isLoggedIn() { return true; }
+  async login() { return { success: true, token: 'mock-token' }; }
+  async register() { return { success: true }; }
+  async resetPassword() { return { success: true }; }
+  async sendResetCode() { return { success: true }; }
+  async logout() { this.isAuthenticated = false; }
+  async getRandomSites() { return []; }
+  async initDB() { }
+  async checkAuthStatus() { return true; }
+  async getUserProfile() { return { username: 'MockUser', email: 'mock@example.com', role: 'user', avatar_url: null }; }
+  async updateUserProfile() { return { success: true }; }
+  async getGroups() { return []; }
+  async getGroupsWithSites() { return []; }
+  async getGroup() { return { id: 1, name: 'Mock' } as any; }
+  async createGroup() { return { id: Date.now() } as any; }
+  async updateGroup() { return { id: 1 } as any; }
+  async deleteGroup() { return true; }
+  async restoreGroup() { return { id: 1 } as any; }
+  async deleteGroupPermanently() { return true; }
+  async getTrashGroups() { return []; }
+  async getSites() { return []; }
+  async getSite() { return { id: 1, name: 'Mock' } as any; }
+  async createSite() { return { id: Date.now() } as any; }
+  async updateSite() { return { id: 1 } as any; }
+  async deleteSite() { return true; }
+  async clickSite() { return true; }
+  async deleteSites() { return true; }
+  async restoreSites() { return true; }
+  async deleteSitesPermanently() { return true; }
+  async batchUpdateSites() { return { success: true, message: '', count: 0 }; }
+  async batchSyncSiteInfo() { return true; }
+  async restoreSite() { return { id: 1 } as any; }
+  async getTrashSites() { return []; }
+  async deleteSitePermanently() { return true; }
+  async getConfigs() { return {}; }
+  async getConfig() { return null; }
+  async setConfig() { return true; }
+  async deleteConfig() { return true; }
+  async updateGroupOrder() { return true; }
+  async updateSiteOrder() { return true; }
+  async exportData() { return {} as any; }
+  async importData() { return { success: true, message: '' }; }
+  async clearAllData() { return true; }
+  async chatStream() { }
+  async chat() { return { success: true }; }
+  async getAIModels() { return []; }
+  async fetchSiteInfo() { return { success: true }; }
+  async fetchSiteInfoDirectly() { return { success: false, message: 'Mock' }; }
+  async batchUpdateIcons() { return { success: true, count: 0 }; }
 }
