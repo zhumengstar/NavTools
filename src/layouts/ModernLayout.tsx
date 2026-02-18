@@ -20,6 +20,7 @@ interface Props {
     headerContent?: React.ReactNode; // Content for the right side of the header (search, theme toggle, avatar)
     sidebarContent?: React.ReactNode;
     title?: string;
+    bookmarkCount?: number;
 }
 
 function HideOnScroll(props: { children: React.ReactElement }) {
@@ -33,7 +34,7 @@ function HideOnScroll(props: { children: React.ReactElement }) {
     );
 }
 
-const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTools" }) => {
+const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTools", bookmarkCount = 0 }) => {
     const theme = useTheme();
 
     const glassStyle = useMemo(() => ({
@@ -73,6 +74,24 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 }}
                             >
                                 {title}
+                                {bookmarkCount > 0 && (
+                                    <Box component="span" sx={{
+                                        ml: 1.5,
+                                        px: 1,
+                                        py: 0.2,
+                                        fontSize: '0.75rem',
+                                        borderRadius: '10px',
+                                        background: alpha(theme.palette.primary.main, 0.1),
+                                        color: theme.palette.primary.main,
+                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                                        verticalAlign: 'middle',
+                                        letterSpacing: 0,
+                                        fontFamily: theme.typography.fontFamily,
+                                        fontWeight: 500
+                                    }}>
+                                        {bookmarkCount}
+                                    </Box>
+                                )}
                             </Typography>
 
 
@@ -94,6 +113,23 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 }}
                             >
                                 {title}
+                                {bookmarkCount > 0 && (
+                                    <Box component="span" sx={{
+                                        ml: 1,
+                                        px: 0.8,
+                                        py: 0.1,
+                                        fontSize: '0.7rem',
+                                        borderRadius: '8px',
+                                        background: alpha(theme.palette.primary.main, 0.1),
+                                        color: theme.palette.primary.main,
+                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                                        letterSpacing: 0,
+                                        fontFamily: theme.typography.fontFamily,
+                                        fontWeight: 500
+                                    }}>
+                                        {bookmarkCount}
+                                    </Box>
+                                )}
                             </Typography>
 
                             {/* Right Side Content (Search, Avatar, ThemeToggle) */}

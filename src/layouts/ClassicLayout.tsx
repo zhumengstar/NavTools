@@ -50,9 +50,10 @@ interface Props {
     headerContent: React.ReactNode; // Buttons etc.
     title: string;
     configs: Record<string, string>;
+    bookmarkCount?: number;
 }
 
-const ClassicLayout: React.FC<Props> = ({ children, headerContent, title, configs }) => {
+const ClassicLayout: React.FC<Props> = ({ children, headerContent, title, configs, bookmarkCount = 0 }) => {
 
     return (
         <Box
@@ -134,6 +135,24 @@ const ClassicLayout: React.FC<Props> = ({ children, headerContent, title, config
                         }}
                     >
                         {title}
+                        {bookmarkCount > 0 && (
+                            <Box component="span" sx={{
+                                ml: 2,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                px: 1.5,
+                                py: 0.5,
+                                fontSize: '1rem',
+                                borderRadius: '12px',
+                                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                                border: '1px solid divider',
+                                color: 'text.secondary',
+                                verticalAlign: 'middle',
+                                fontWeight: 'normal'
+                            }}>
+                                {bookmarkCount} 个书签
+                            </Box>
+                        )}
                     </Typography>
 
                     {/* Header Content (Buttons) */}

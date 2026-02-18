@@ -1050,6 +1050,11 @@ function App() {
     }
   }, [groups, configs, api, isAdmin]);
 
+  // 计算总书签数
+  const totalBookmarkCount = useMemo(() => {
+    return groups.reduce((total, group) => total + (group.sites?.length || 0), 0);
+  }, [groups]);
+
 
   const fetchData = useCallback(async (silent = false) => {
     try {
@@ -2173,9 +2178,6 @@ function App() {
               is_public: 1
             }));
 
-          const skippedInChunk = currentChunk.length - sitesToImport.length;
-          sitesSkipped += skippedInChunk;
-
           if (sitesToImport.length > 0) {
             try {
               const batchResult = await api.importData({
@@ -2189,11 +2191,16 @@ function App() {
                 configs: {}
               });
 
-              if (batchResult.success) {
-                sitesCreated += sitesToImport.length;
-                console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次导入成功 (${sitesToImport.length} 个书签)`);
+              if (batchResult.success && batchResult.stats) {
+                // 使用后端返回的真实统计数据
+                const { created, skipped } = batchResult.stats.sites;
+                sitesCreated += created;
+                sitesSkipped += skipped;
+
+                console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次导入完成 (新增 ${created} 个，跳过 ${skipped} 个)`);
 
                 // --- 视觉优化：局部状态乐观追加 ---
+                // 注意：如果后端有跳过，这里按 sitesToImport 全量追加会有微小视觉误差，但 fetchData(false) 最终会修正
                 const sitesAdded = sitesToImport as any[];
 
                 setGroups(prevGroups => {
@@ -2218,8 +2225,6 @@ function App() {
             } catch (error) {
               console.error(`[Import] 批量导入批次失败:`, error);
             }
-          } else if (skippedInChunk > 0) {
-            console.log(`[Import] 分组 "${groupName}": 第 ${Math.floor(j / chunkSize) + 1} 批次全部跳过 (已存在)`);
           }
 
           processed += currentChunk.length;
@@ -2227,7 +2232,7 @@ function App() {
           // 核心：不再在分批中途执行 fetchData(true)，防止 API 快照回滚导致的数值跳动
           // 我们依赖上面的 setGroups 局部更新来维持 UI 的最新状态
 
-          const progress = totalBookmarks > 0 ? Math.round((sitesCreated / totalBookmarks) * 100) : 0;
+          const progress = totalBookmarks > 0 ? Math.min(100, Math.round((sitesCreated / totalBookmarks) * 100)) : 0;
           setChromeImportProgress(progress);
 
           // 计算预计剩余时间
@@ -2259,25 +2264,14 @@ function App() {
         } // chunks loop end
       } // outer loop end
 
-      // --- 最终统计：基于实际状态重新计算 ---
-      const finalGroups = workingGroups;
-      let finalTotalSites = 0;
-      finalGroups.forEach(g => { finalTotalSites += (g.sites || []).length; });
+      // 书签统计
+      const actualSitesCreated = sitesCreated;
+      const actualSitesSkipped = sitesSkipped;
 
-      // 获取初始总站点数（基于最初入参前的快照）
-      // 注意：由于 workingGroups 是基于 groups 初始化的，我们可以对比最初的 groups
-      let initialTotalSites = 0;
-      groups.forEach(g => { initialTotalSites += (g.sites || []).length; });
-
-      // 实际新增量 = 当前总数 - 初始总数
-      const actualSitesCreated = Math.max(0, finalTotalSites - initialTotalSites);
-      const actualSitesSkipped = Math.max(0, totalBookmarks - actualSitesCreated);
-
-      // 完成后清理
       const summary = [
         `Chrome 书签导入完成！`,
-        `分组：发现${bookmarkGroups.length}个，新建${groupsCreated}个，合并${groupsMerged}个`,
-        `书签：共${totalBookmarks}个，实际新增${actualSitesCreated}个，跳过${actualSitesSkipped}个`,
+        `分组：发现 ${bookmarkGroups.length} 个，新建 ${groupsCreated} 个`,
+        `书签：共 ${totalBookmarks} 个，实际新增 ${actualSitesCreated} 个`,
       ].join('\n');
 
       setImportResultMessage(summary);
@@ -2663,6 +2657,7 @@ function App() {
             <ActiveLayout
               title={configs['site.name'] || ''}
               configs={configs}
+              bookmarkCount={totalBookmarkCount}
               headerContent={
                 <Stack
                   direction='row'
