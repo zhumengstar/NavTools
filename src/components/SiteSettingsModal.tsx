@@ -278,6 +278,7 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
       fullWidth
       maxWidth='sm'
       fullScreen={isMobile}
+      sx={{ zIndex: 1400 }} // Ensure above import progress
       PaperProps={{
         sx: {
           borderRadius: 2,

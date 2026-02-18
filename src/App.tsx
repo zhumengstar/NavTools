@@ -2382,7 +2382,7 @@ function App() {
       setImportStartTime(null);
 
       // 最终同步后端数据（fetchData 内部会自动更新缓存）
-      await fetchData(false);
+      // await fetchData(false); // Removed to prevent page refresh
     } catch (error) {
       console.error('迭代导入失败:', error);
     } finally {
@@ -2651,7 +2651,7 @@ function App() {
                 bottom: 24,
                 left: '50%',
                 transform: 'translateX(-50%)',
-                zIndex: 3000,
+                zIndex: 1200, // Reduced from 3000 to be below Modals (1300+)
                 width: { xs: '90%', sm: 360 },
                 p: 2,
                 borderRadius: 3,
@@ -3245,6 +3245,7 @@ function App() {
                 onClose={handleCloseConfig}
                 maxWidth='sm'
                 fullWidth
+                sx={{ zIndex: 1400 }} // Ensure above import progress
                 PaperProps={{
                   sx: {
                     m: { xs: 2, sm: 3, md: 4 },

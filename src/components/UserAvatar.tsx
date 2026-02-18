@@ -526,6 +526,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                     maxWidth='xs'
                     fullWidth
                     fullScreen={isMobile}
+                    sx={{ zIndex: 1400 }} // Ensure above import progress
                 >
                     <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <AccountCircleIcon color='primary' />
@@ -787,6 +788,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                     maxWidth='xs'
                     fullWidth
                     fullScreen={isMobile}
+                    sx={{ zIndex: 1400 }} // Ensure above import progress
                 >
                     <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <LockResetIcon color='primary' />
