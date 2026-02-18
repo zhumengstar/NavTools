@@ -245,6 +245,8 @@ function App() {
   const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
+  const [showActionLoading, setShowActionLoading] = useState(false); // 通用操作加载状态
+  const [actionProgress, setActionProgress] = useState(0); // 操作进度
 
   // 注册状态
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -285,9 +287,16 @@ function App() {
           primary: {
             main: darkMode ? '#8b5cf6' : '#6366f1', // Violet / Indigo
           },
+          secondary: {
+            main: darkMode ? '#60a5fa' : '#3b82f6', // 蓝色系
+          },
+          text: {
+            primary: darkMode ? '#e8edf5' : '#1f2937',
+            secondary: darkMode ? '#94a3b8' : '#4b5563',
+          },
           background: {
             default: 'transparent',
-            paper: darkMode ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            paper: darkMode ? 'rgba(20, 28, 46, 0.7)' : 'rgba(255, 255, 255, 0.7)',
           },
         },
         shape: {
@@ -358,7 +367,7 @@ function App() {
               paper: {
                 borderRadius: 16,
                 backdropFilter: 'blur(16px)',
-                backgroundColor: darkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+                backgroundColor: darkMode ? 'rgba(20, 28, 46, 0.92)' : 'rgba(255, 255, 255, 0.85)',
                 border: '1px solid var(--glass-border)',
                 boxShadow: '0 24px 48px rgba(0,0,0,0.2)',
               },
@@ -2437,6 +2446,92 @@ function App() {
     }
   };
 
+  // 批量自动补全网站信息
+  const handleBatchAutoFulfill = useCallback(async (siteIds: number[]) => {
+    if (siteIds.length === 0) return;
+
+    setShowActionLoading(true);
+    setActionProgress(0);
+    let successCount = 0;
+    let failCount = 0;
+
+    const config = await api.getConfigs();
+    const iconApiPattern = config.icon_api || 'https://www.faviconextractor.com/favicon/{domain}?larger=true';
+
+    try {
+      // 获取所有相关站点的当前状态
+      const allSites = groups.flatMap(g => g.sites);
+      const sitesToProcess = allSites.filter(s => s.id && siteIds.includes(s.id));
+
+      for (let i = 0; i < sitesToProcess.length; i++) {
+        const site = sitesToProcess[i];
+        if (!site) continue;
+
+        setActionProgress(Math.round(((i + 1) / sitesToProcess.length) * 100));
+
+        let needsUpdate = false;
+        const updates: Partial<Site> = {};
+
+        // 补全图标
+        if (!site.icon) {
+          const domain = extractDomain(site.url);
+          if (domain) {
+            updates.icon = iconApiPattern.replace('{domain}', domain);
+            needsUpdate = true;
+          }
+        }
+
+        // 补全标题和描述
+        if (!site.name || !site.description || site.description === '暂无描述' || site.description === site.name) {
+          try {
+            const info = await api.fetchSiteInfo(site.url);
+            if (info.success) {
+              if (!site.name || site.name === extractDomain(site.url)) {
+                updates.name = info.name || (site.name as string);
+              }
+              if (!site.description || site.description === '暂无描述' || site.description === site.name) {
+                updates.description = info.description || (site.description as string);
+              }
+              needsUpdate = true;
+            }
+          } catch (err) {
+            console.warn(`获取站点信息失败 (${site.url}):`, err);
+          }
+        }
+
+        if (needsUpdate && site.id) {
+          try {
+            await api.batchUpdateSites([site.id], updates);
+            // 同步更新本地 state
+            setGroups(prev => prev.map(g => ({
+              ...g,
+              sites: g.sites.map(s => s.id === site.id ? { ...s, ...updates } : s)
+            })));
+            successCount++;
+          } catch (err) {
+            console.error(`更新站点失败 (${site.id}):`, err);
+            failCount++;
+          }
+        } else {
+          successCount++;
+        }
+
+        // 释放主线程
+        if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      handleSuccess(`信息补全完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+      // 最终同步一次，确保缓存正确
+      fetchData(false);
+    } catch (error) {
+      console.error('批量自动补全失败:', error);
+      handleError('批量自动补全过程中出错');
+    } finally {
+      setShowActionLoading(false);
+      setActionProgress(0);
+    }
+  }, [groups, api, handleSuccess, handleError, fetchData]);
+
   // 批量更新精选状态
   const handleBatchFeaturedUpdate = useCallback(async (siteIds: number[], isFeatured: number) => {
     try {
@@ -2641,7 +2736,20 @@ function App() {
               overflow: 'hidden', // 防止背景图片溢出
             }}
           >
-            {/* 背景图片 */}
+            {/* 全局操作进度覆盖层 */}
+            <Backdrop
+              sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 999, display: 'flex', flexDirection: 'column', gap: 2 }}
+              open={showActionLoading}
+            >
+              <CircularProgress color="inherit" />
+              <Box sx={{ width: '300px', textAlign: 'center' }}>
+                <Typography variant="h6" gutterBottom>正在补全网站信息...</Typography>
+                <LinearProgress variant="determinate" value={actionProgress} />
+                <Typography variant="body2" sx={{ mt: 1 }}>{actionProgress}%</Typography>
+              </Box>
+            </Backdrop>
+
+            {/* 消息提示 */}
             {configs['site.backgroundImage'] && isSecureUrl(configs['site.backgroundImage']) && (
               <>
                 <Box
@@ -2939,6 +3047,7 @@ function App() {
                                       draggedSiteId={draggedSiteId}
                                       globalToggleVersion={globalToggleVersion}
                                       onBatchFeaturedUpdate={handleBatchFeaturedUpdate}
+                                      onBatchAutoFulfill={handleBatchAutoFulfill}
                                       isAdmin={isAdmin}
                                     />
                                   ))}

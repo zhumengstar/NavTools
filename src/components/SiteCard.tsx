@@ -144,7 +144,9 @@ const SiteCard = memo(function SiteCard({
             : {},
           overflow: 'hidden',
           // backgroundColor & backdropFilter handled by MuiCard theme override
-          background: 'rgba(255, 255, 255, 0.1)', // Slight tint for card body
+          background: (theme) => theme.palette.mode === 'dark'
+            ? 'rgba(20, 28, 46, 0.5)'
+            : 'rgba(255, 255, 255, 0.1)', // Slight tint for card body
         }}
       >
         {isEditMode ? (

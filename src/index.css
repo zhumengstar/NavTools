@@ -9,9 +9,9 @@
 }
 
 .dark {
-    --glass-bg: rgba(30, 30, 30, 0.6);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --glass-bg: rgba(25, 32, 45, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
 }
 
 body {
@@ -38,7 +38,7 @@ body.modern-theme {
 }
 
 .dark body.modern-theme {
-    background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #1e293b);
+    background: linear-gradient(-45deg, #111111, #1a1a1a, #141414, #0d0d0d);
     background-size: 400% 400%;
     animation: gradient 20s ease infinite;
 }

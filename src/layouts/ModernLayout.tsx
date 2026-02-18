@@ -63,14 +63,21 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 sx={{
                                     mr: 2,
                                     display: { xs: 'none', md: 'flex' },
-                                    fontFamily: 'monospace',
-                                    fontWeight: 800,
-                                    letterSpacing: '.2rem',
-                                    color: 'primary.main',
+                                    fontFamily: '"Orbitron", "Inter", sans-serif', // 更现代的字体
+                                    fontWeight: 900,
+                                    letterSpacing: '.15rem',
                                     textDecoration: 'none',
-                                    background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary?.main || theme.palette.primary.light})`,
+                                    background: theme.palette.mode === 'dark'
+                                        ? 'linear-gradient(90deg, #a78bfa 0%, #34d399 100%)' // 深色模式：紫罗兰到薄荷绿
+                                        : 'linear-gradient(90deg, #6366f1 0%, #ec4899 100%)', // 浅色模式：靛蓝到粉色
                                     WebkitBackgroundClip: 'text',
                                     WebkitTextFillColor: 'transparent',
+                                    filter: theme.palette.mode === 'dark' ? 'drop-shadow(0 0 8px rgba(167, 139, 250, 0.3))' : 'none',
+                                    transition: 'all 0.3s ease',
+                                    '&:hover': {
+                                        filter: theme.palette.mode === 'dark' ? 'drop-shadow(0 0 12px rgba(167, 139, 250, 0.5))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                                        transform: 'scale(1.02)',
+                                    }
                                 }}
                             >
                                 {title}
@@ -81,13 +88,13 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                         py: 0.2,
                                         fontSize: '0.75rem',
                                         borderRadius: '10px',
-                                        background: alpha(theme.palette.primary.main, 0.1),
-                                        color: theme.palette.primary.main,
-                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                                        background: alpha(theme.palette.primary.main, 0.15),
+                                        color: theme.palette.mode === 'dark' ? '#a78bfa' : theme.palette.primary.main,
+                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
                                         verticalAlign: 'middle',
                                         letterSpacing: 0,
                                         fontFamily: theme.typography.fontFamily,
-                                        fontWeight: 500
+                                        fontWeight: 600
                                     }}>
                                         {bookmarkCount}
                                     </Box>
@@ -105,10 +112,14 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                     mr: 2,
                                     display: { xs: 'flex', md: 'none' },
                                     flexGrow: 1,
-                                    fontFamily: 'monospace',
-                                    fontWeight: 700,
-                                    letterSpacing: '.3rem',
-                                    color: 'inherit',
+                                    fontFamily: '"Orbitron", "Inter", sans-serif',
+                                    fontWeight: 900,
+                                    letterSpacing: '.1rem',
+                                    background: theme.palette.mode === 'dark'
+                                        ? 'linear-gradient(90deg, #a78bfa 0%, #34d399 100%)'
+                                        : 'linear-gradient(90deg, #6366f1 0%, #ec4899 100%)',
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
                                     textDecoration: 'none',
                                 }}
                             >
