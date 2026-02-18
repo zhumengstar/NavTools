@@ -1463,10 +1463,12 @@ function App() {
                 setGroups(prev => {
                   const newGroups = [...prev];
                   const g = { ...newGroups[item.groupIndex] };
-                  const s = [...g.sites];
+                  // Fix TS2488: Handle potential undefined sites
+                  const s = [...(g.sites || [])];
                   s[item.siteIndex] = updatedSite;
                   g.sites = s;
-                  newGroups[item.groupIndex] = g;
+                  // Fix TS2322: Explicitly cast to GroupWithSites to resolve type mismatch
+                  newGroups[item.groupIndex] = g as GroupWithSites;
                   return newGroups;
                 });
               }
