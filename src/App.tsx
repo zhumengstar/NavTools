@@ -1406,6 +1406,87 @@ function App() {
 
   }, []);
 
+  // === 后台自动补全网站信息逻辑 ===
+  useEffect(() => {
+    if (configs['site.autoCompleteInfo'] !== 'true' || !isAuthenticated) return;
+
+    let timer: any = null;
+
+    const runAutoCompleteTask = async () => {
+      try {
+        console.log('[Background] 启动网站信息后台补全任务...');
+
+        const sitesToFix: { site: Site; groupIndex: number; siteIndex: number }[] = [];
+
+        groups.forEach((group, gi) => {
+          group.sites.forEach((site, si) => {
+            const needsInfo = !site.description || !site.name || site.name.includes('://') || !site.icon;
+            if (needsInfo && site.id && !site.url.startsWith('javascript:')) {
+              sitesToFix.push({ site, groupIndex: gi, siteIndex: si });
+            }
+          });
+        });
+
+        if (sitesToFix.length === 0) {
+          console.log('[Background] 没有发现需要补全的站点');
+          return;
+        }
+
+        const batchSize = 3;
+        const currentBatch = sitesToFix.slice(0, batchSize);
+
+        console.log(`[Background] 正在处理 ${currentBatch.length}/${sitesToFix.length} 个待补全站点...`);
+
+        for (const item of currentBatch) {
+          const { site } = item;
+          try {
+            const info = await api.fetchSiteInfo(site.url);
+            let iconUrl = site.icon;
+            if (!iconUrl) {
+              const domain = extractDomain(site.url);
+              if (domain) {
+                const iconApi = configs['site.iconApi'] || 'https://www.faviconextractor.com/favicon/{domain}?larger=true';
+                iconUrl = iconApi.replace('{domain}', domain);
+              }
+            }
+
+            if (info.success || iconUrl !== site.icon) {
+              const updatedSite = {
+                ...site,
+                name: site.name && !site.name.includes('://') ? site.name : (info.name || site.name),
+                description: site.description || info.description || site.description,
+                icon: iconUrl || site.icon
+              };
+
+              if (JSON.stringify(updatedSite) !== JSON.stringify(site)) {
+                await api.updateSite(site.id!, updatedSite);
+                setGroups(prev => {
+                  const newGroups = [...prev];
+                  const g = { ...newGroups[item.groupIndex] };
+                  const s = [...g.sites];
+                  s[item.siteIndex] = updatedSite;
+                  g.sites = s;
+                  newGroups[item.groupIndex] = g;
+                  return newGroups;
+                });
+              }
+            }
+          } catch (e) {
+            console.error(`[Background] 补全站点 ${site.url} 失败:`, e);
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (err) {
+        console.error('[Background] 后台补全任务出错:', err);
+      } finally {
+        timer = setTimeout(runAutoCompleteTask, 30000);
+      }
+    };
+
+    timer = setTimeout(runAutoCompleteTask, 10000);
+    return () => { if (timer) clearTimeout(timer); };
+  }, [isAuthenticated, configs, groups, api, configs['site.iconApi']]);
+
   // 处理跨分组拖拽的 DragOver 事件
   const handleSiteDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
@@ -1419,11 +1500,9 @@ function App() {
     if (!activeId.startsWith('site-')) return;
     const activeSiteId = parseInt(activeId.replace('site-', ''));
 
-    // 查找 active 所在的 Group
     const activeGroup = groups.find(g => g.sites.some(s => s.id === activeSiteId));
     if (!activeGroup) return;
 
-    // 查找 over 所在的 Group
     let overGroupId: number | null = null;
     if (overId.startsWith('group-')) {
       overGroupId = parseInt(overId.replace('group-', ''));
@@ -1437,9 +1516,7 @@ function App() {
 
     const overSiteId = overId.startsWith('site-') ? parseInt(overId.replace('site-', '')) : null;
 
-    // 移动站点以显示占位
     setGroups((prev) => {
-      // 找到源分组和目标分组
       const sourceIndex = prev.findIndex(g => g.sites.some(s => s.id === activeSiteId));
       const targetIndex = overId.startsWith('group-')
         ? prev.findIndex(g => g.id === overGroupId)
@@ -1449,27 +1526,18 @@ function App() {
 
       const source = prev[sourceIndex];
       const target = prev[targetIndex];
-
       if (!source || !target) return prev;
-
-      // 如果源和目标相同，且是 site-to-site，dnd-kit-sortable 会处理，这里不处理
       if (sourceIndex === targetIndex) return prev;
 
       const siteIndex = source.sites.findIndex(s => s.id === activeSiteId);
       if (siteIndex === -1) return prev;
 
-      // 仅在真正发生跨组变化或位置变化时更新状态
       const movedSite = source.sites[siteIndex];
-
-      // 创建新数组，仅克隆受影响的分组
       const newGroups = [...prev];
-
-      // 更新源分组：移除站点
       const newSourceSites = [...source.sites];
       newSourceSites.splice(siteIndex, 1);
       newGroups[sourceIndex] = { ...source, sites: newSourceSites } as any;
 
-      // 更新目标分组：插入站点
       const newTargetSites = [...target.sites];
       const siteToInsert = { ...movedSite, group_id: target.id as number } as any;
 

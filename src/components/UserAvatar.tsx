@@ -39,6 +39,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 const RecycleBin = React.lazy(() => import('./RecycleBin'));
 import { Site, Group } from '../API/http';
 
@@ -735,6 +736,35 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                                             <Typography variant="body2">自动清理死链</Typography>
                                             <Typography variant="caption" color="text.secondary" display="block">
                                                 检测到网页无法访问时自动移动到回收站
+                                            </Typography>
+                                        </Box>
+                                    }
+                                    sx={{ ml: 0, width: '100%' }}
+                                />
+                            </ListItem>
+                            <ListItem disablePadding sx={{ py: 0.5 }}>
+                                <ListItemIcon sx={{ minWidth: 36 }}>
+                                    <AutoFixHighIcon fontSize='small' color='action' />
+                                </ListItemIcon>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
+                                            size="small"
+                                            checked={configs['site.autoCompleteInfo'] === 'true'}
+                                            onChange={(e) => {
+                                                onUpdateConfigs({
+                                                    ...configs,
+                                                    'site.autoCompleteInfo': e.target.checked ? 'true' : 'false'
+                                                });
+                                            }}
+                                            color="primary"
+                                        />
+                                    }
+                                    label={
+                                        <Box>
+                                            <Typography variant="body2">后台补全网站信息</Typography>
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                                自动获取并更新缺失标题、描述或图标的网站
                                             </Typography>
                                         </Box>
                                     }

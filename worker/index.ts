@@ -349,20 +349,27 @@ export default {
                             // 如果登录成功，设置 HttpOnly Cookie
                             if (result.success && result.token) {
                                 const maxAge = loginData.rememberMe ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60;
+                                const url = new URL(request.url);
+                                const isSecure = url.protocol === 'https:';
+
+                                const cookieParts = [
+                                    `auth_token=${result.token}`,
+                                    'HttpOnly',
+                                    'SameSite=Lax',
+                                    `Max-Age=${maxAge}`,
+                                    'Path=/',
+                                ];
+
+                                if (isSecure) {
+                                    cookieParts.push('Secure');
+                                }
 
                                 return createJsonResponse(
                                     { success: true, message: result.message },
                                     request,
                                     {
                                         headers: {
-                                            'Set-Cookie': [
-                                                `auth_token=${result.token}`,
-                                                'HttpOnly',
-                                                'Secure',
-                                                'SameSite=Lax',
-                                                `Max-Age=${maxAge}`,
-                                                'Path=/',
-                                            ].join('; '),
+                                            'Set-Cookie': cookieParts.join('; '),
                                         },
                                     }
                                 );
