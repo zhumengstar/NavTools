@@ -56,6 +56,7 @@ interface UserAvatarProps {
     onExportData: () => void;
     onOpenImport: () => void;
     onOpenAddGroup: () => void;
+    onOpenAdminConfig: () => void; // New prop for Admin Management
     configs: Record<string, string>;
     onUpdateConfigs: (newConfigs: Record<string, string>) => Promise<void>;
     onResetData: () => void;
@@ -75,6 +76,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
     onExportData,
     onOpenImport,
     onOpenAddGroup,
+    onOpenAdminConfig, // Destructure new prop
     configs,
     onUpdateConfigs,
     onResetData,
@@ -445,7 +447,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                 </Box>
                 <Divider />
                 {isAdmin && (
-                    <MenuItem onClick={() => { handleMenuClose(); onOpenConfig(); }} sx={menuItemSx}>
+                    <MenuItem onClick={() => { handleMenuClose(); onOpenAdminConfig(); }} sx={menuItemSx}>
                         <ListItemIcon>
                             <SettingsIcon fontSize='small' />
                         </ListItemIcon>
