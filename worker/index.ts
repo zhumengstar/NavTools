@@ -682,7 +682,41 @@ export default {
                                 { status: 500 }
                             );
                         }
-                    } else if (path === "user/profile" && method === "PUT") {
+                    }
+                    // 批量获取书签图标
+                    else if (path === "utils/batch-update-icons" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return createResponse("未认证", request, { status: 401 });
+                        }
+                        try {
+                            const result = await api.batchUpdateIcons();
+                            return createJsonResponse(result, request);
+                        } catch (error) {
+                            return createJsonResponse(
+                                { success: false, message: "批量更新图标失败" },
+                                request,
+                                { status: 500 }
+                            );
+                        }
+                    }
+                    // 批量同步站点补全信息
+                    else if (path === "sites/batch-sync-info" && method === "PUT") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return createResponse("未认证", request, { status: 401 });
+                        }
+                        try {
+                            const { updates } = (await validateRequestBody(request)) as { updates: { id: number; data: Partial<Site> }[] };
+                            const success = await api.batchSyncSiteInfo(currentUserId, updates);
+                            return createJsonResponse({ success }, request);
+                        } catch (error) {
+                            return createJsonResponse(
+                                { success: false, message: "批量同步站点信息失败" },
+                                request,
+                                { status: 500 }
+                            );
+                        }
+                    }
+                    else if (path === "user/profile" && method === "PUT") {
                         if (!isAuthenticated || !currentUserId) {
                             return createResponse("未认证", request, { status: 401 });
                         }
@@ -1377,108 +1411,91 @@ export default {
 
                         return createJsonResponse(result, request);
                     }
-                    // 获取站点信息 (标题和描述)
-                    else if (path === "utils/fetch-site-info" && method === "GET") {
-                        if (!isAuthenticated) {
-                            return createResponse("未认证", request, { status: 401 });
+                    // 批量获取书签图标
+                    else if (path === "utils/batch-update-icons" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return createJsonResponse({ success: false, message: "请先登录" }, request, { status: 401 });
                         }
-
-                        const targetUrl = url.searchParams.get("url");
-                        if (!targetUrl) {
-                            return createJsonResponse({ success: false, message: "参数 url 不能为空" }, request, { status: 400 });
-                        }
-
                         try {
-                            let fetchResponse;
-                            console.log(`[Fetch Info] Attempting to fetch: ${targetUrl}`);
-                            try {
-                                fetchResponse = await fetch(targetUrl, {
-                                    headers: {
-                                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
-                                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                                    },
-                                    redirect: "follow",
-                                    // 设置较短的超时时间，避免 Worker 无限等待
-                                    signal: AbortSignal.timeout(5000)
-                                });
-                            } catch (fetchErr) {
-                                console.error(`[Fetch Info] Failed for ${targetUrl}:`, fetchErr);
-                                return createJsonResponse({
-                                    success: false,
-                                    message: "站点无法访问或请求超时",
-                                    deadLink: true
-                                }, request, { status: 400 });
+                            const payload = await validateRequestBody(request);
+                            console.log('[Worker Debug] utils/batch-update-icons payload:', JSON.stringify(payload));
+                            const { siteIds } = payload as { siteIds: number[] };
+
+                            if (!siteIds || !Array.isArray(siteIds) || siteIds.length === 0) {
+                                return createJsonResponse({ success: false, message: "参数 siteIds 必须是包含站点ID的数组" }, request, { status: 400 });
                             }
 
-                            if (!fetchResponse.ok) {
-                                return createJsonResponse({
-                                    success: false,
-                                    message: `站点返回错误: ${fetchResponse.status}`,
-                                    deadLink: fetchResponse.status >= 400 && fetchResponse.status < 600
-                                }, request, { status: 400 });
-                            }
+                            const results = await Promise.all(siteIds.map(async (siteId) => {
+                                try {
+                                    const site = await api.getSiteById(siteId);
+                                    if (!site) {
+                                        return { id: siteId, success: false, message: "站点未找到" };
+                                    }
 
-                            let title = "";
-                            let description = "";
-                            let icon = "";
+                                    const targetUrl = site.url;
+                                    if (!targetUrl) {
+                                        return { id: siteId, success: false, message: "站点URL为空" };
+                                    }
 
-                            // 使用 HTMLRewriter 提取信息
-                            const rewriter = new HTMLRewriter()
-                                .on("title", {
-                                    text(t) {
-                                        title += t.text;
+                                    let fetchResponse;
+                                    try {
+                                        fetchResponse = await fetch(targetUrl, {
+                                            headers: {
+                                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+                                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                                                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                                            },
+                                            redirect: "follow",
+                                            signal: AbortSignal.timeout(5000)
+                                        });
+                                    } catch (fetchErr) {
+                                        console.error(`[Fetch Icon] Failed for ${targetUrl}:`, fetchErr);
+                                        return { id: siteId, success: false, message: "站点无法访问或请求超时", deadLink: true };
                                     }
-                                })
-                                .on("meta[name='description']", {
-                                    element(e) {
-                                        description = e.getAttribute("content") || "";
+
+                                    if (!fetchResponse.ok) {
+                                        return { id: siteId, success: false, message: `站点返回错误: ${fetchResponse.status}`, deadLink: fetchResponse.status >= 400 && fetchResponse.status < 600 };
                                     }
-                                })
-                                .on("meta[name='Description']", {
-                                    element(e) {
-                                        if (!description) description = e.getAttribute("content") || "";
-                                    }
-                                })
-                                .on("meta[property='og:title']", {
-                                    element(e) {
-                                        if (!title) title = e.getAttribute("content") || "";
-                                    }
-                                })
-                                .on("meta[property='og:description']", {
-                                    element(e) {
-                                        if (!description) description = e.getAttribute("content") || "";
-                                    }
-                                })
-                                .on("link[rel='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon']", {
-                                    element(e) {
-                                        if (!icon) {
-                                            let href = e.getAttribute("href") || "";
-                                            if (href) {
-                                                try {
-                                                    // 尝试处理相对路径
-                                                    icon = new URL(href, targetUrl).toString();
-                                                } catch {
-                                                    icon = href;
+
+                                    let icon = "";
+                                    const rewriter = new HTMLRewriter()
+                                        .on("link[rel='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon']", {
+                                            element(e) {
+                                                if (!icon) {
+                                                    let href = e.getAttribute("href") || "";
+                                                    if (href) {
+                                                        try {
+                                                            icon = new URL(href, targetUrl).toString();
+                                                        } catch {
+                                                            icon = href;
+                                                        }
+                                                    }
                                                 }
                                             }
-                                        }
+                                        });
+
+                                    await rewriter.transform(fetchResponse).arrayBuffer();
+
+                                    if (icon) {
+                                        const updateResult = await api.updateSite(siteId, { icon });
+                                        return { id: siteId, success: updateResult, icon };
+                                    } else {
+                                        return { id: siteId, success: false, message: "未找到图标" };
                                     }
-                                });
 
-                            await rewriter.transform(fetchResponse).arrayBuffer();
+                                } catch (e) {
+                                    console.error(`[Fetch Icon] Error processing site ${siteId}:`, e);
+                                    return { id: siteId, success: false, message: `处理失败: ${e instanceof Error ? e.message : '未知错误'}` };
+                                }
+                            }));
 
-                            return createJsonResponse({
-                                success: true,
-                                name: title.trim().slice(0, 100),
-                                description: description.trim().slice(0, 500),
-                                icon: icon
-                            }, request);
-                        } catch (e) {
-                            return createJsonResponse({ success: false, message: `抓取失败: ${e instanceof Error ? e.message : '未知错误'}` }, request, { status: 500 });
+                            return createJsonResponse({ success: true, results }, request);
+                        } catch (error) {
+                            console.error('Batch update icons failed:', error);
+                            return createJsonResponse({ success: false, message: "批量更新图标请求无效: " + (error instanceof Error ? error.message : String(error)) }, request, { status: 400 });
                         }
-
-                    } else if (path === "sites/batch" && method === "PUT") {
+                    }
+                    else if (path === "sites/batch" && method === "PUT") {
                         if (!isAuthenticated || !currentUserId) {
                             return createJsonResponse({ success: false, message: "请先登录" }, request, { status: 401 });
                         }

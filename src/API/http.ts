@@ -1886,6 +1886,38 @@ export class NavigationAPI {
       console.error('Failed to increment quota:', e);
     }
   }
+
+  /**
+   * 批量同步站点补全信息 (仅在名称/描述为空时更新)
+   */
+  async batchSyncSiteInfo(userId: number, updates: { id: number; data: Partial<Site> }[]): Promise<boolean> {
+    if (!updates || updates.length === 0) return true;
+
+    try {
+      const stmts = updates.map((update) =>
+        this.db
+          .prepare(
+            'UPDATE sites SET ' +
+            'name = CASE WHEN (name IS NULL OR name = "" OR name = url) THEN ? ELSE name END, ' +
+            'description = CASE WHEN (description IS NULL OR description = "") THEN ? ELSE description END, ' +
+            'updated_at = CURRENT_TIMESTAMP ' +
+            'WHERE id = ? AND (SELECT user_id FROM groups WHERE id = sites.group_id) = ?'
+          )
+          .bind(
+            update.data.name || '',
+            update.data.description || '',
+            update.id,
+            userId
+          )
+      );
+
+      const results = await this.db.batch(stmts);
+      return results.every((r) => r.success);
+    } catch (err) {
+      console.error('Batch sync site info failed:', err);
+      return false;
+    }
+  }
 }
 
 // 创建 API 辅助函数

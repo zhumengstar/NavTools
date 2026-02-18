@@ -359,6 +359,15 @@ export class NavigationClient {
     });
   }
 
+  async batchSyncSiteInfo(updates: { id: number; data: Partial<Site> }[]): Promise<boolean> {
+    if (!updates || updates.length === 0) return true;
+    const response = await this.request('sites/batch-sync-info', {
+      method: 'PUT',
+      body: JSON.stringify({ updates }),
+    });
+    return response.success === true;
+  }
+
   async restoreSite(id: number): Promise<Site | null> {
     const response = await this.request(`sites/${id}/restore`, {
       method: 'POST',
@@ -527,7 +536,75 @@ export class NavigationClient {
     return this.request('ai/models');
   }
 
-  // 获取站点元数据 (标题和描述)
+  /**
+   * 直接从前端获取站点元数据 (尝试绕过后端以减少日志和超时)
+   * 注意: 许多站点会因为 CORS 策略拦截此请求
+   */
+  async fetchSiteInfoDirectly(url: string): Promise<{ success: boolean; name?: string; description?: string; icon?: string; message?: string; deadLink?: boolean }> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        },
+        mode: 'cors' // 尝试 CORS 请求
+      });
+
+      clearTimeout(timeoutId);
+
+      // 如果返回 404 或其他明确的错误代码，且不是由于 CORS 导致的
+      if (!response.ok) {
+        return {
+          success: false,
+          message: `HTTP error! status: ${response.status}`,
+          deadLink: response.status === 404 || response.status === 410
+        };
+      }
+
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const title = doc.querySelector('title')?.textContent || '';
+      const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
+        doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+
+      let icon = '';
+      const iconEl = doc.querySelector('link[rel*="icon"]');
+      if (iconEl) {
+        const href = iconEl.getAttribute('href') || '';
+        try {
+          icon = new URL(href, url).toString();
+        } catch {
+          icon = href;
+        }
+      }
+
+      return {
+        success: true,
+        name: title.trim(),
+        description: description.trim(),
+        icon,
+        deadLink: false
+      };
+    } catch (error) {
+      // 如果是 TypeError 且不是 AbortError (超时)，可能是由于链接失效（DNS 错误或彻底无法访问）
+      // 但在前端，CORS 错误也会表现为 TypeError。
+      // 我们谨慎判断：仅在明确的网络错误且非超时情况下考虑为潜在死链。
+      const isAbort = error instanceof Error && error.name === 'AbortError';
+
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Frontend fetch failed',
+        deadLink: !isAbort && error instanceof TypeError // 网络层面彻底失败（且非超时）
+      };
+    }
+  }
+
+  // 获取站点元数据 (已弃用: 后端代理版本，会产生日志和超时)
   async fetchSiteInfo(url: string): Promise<{ success: boolean; name?: string; description?: string; icon?: string; message?: string; deadLink?: boolean }> {
     try {
       return await this.request(`utils/fetch-site-info?url=${encodeURIComponent(url)}`);

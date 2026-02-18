@@ -1028,88 +1028,102 @@ function App() {
     setSnackbarOpen(false);
   }, []);
 
-  // 后台自动补全缺失的站点信息
+  // 后台静默自动维护（补全信息及清理死链）
   const scavengeSiteInfo = useCallback(async () => {
-    // 权限校验：仅在登录状态下启动自动补全和清理流程
+    // 权限校验：仅在登录状态下启动
     if (!isAuthenticated) return;
 
-    // 检查配置是否开启
-    if (configs['site.autoCompleteInfo'] !== 'true') return;
+    const isAutoCompleteEnabled = configs['site.autoCompleteInfo'] === 'true';
+    const isAutoCleanEnabled = configs['site.autoCleanDeadLinks'] === 'true';
 
-    // 找出名称或描述为空的站点
-    const sitesToRefresh: Site[] = [];
+    if (!isAutoCompleteEnabled && !isAutoCleanEnabled) return;
+
+    // 找出所有站点
+    const allSites: Site[] = [];
     groups.forEach(group => {
       group.sites.forEach(site => {
-        if (!site.name || !site.description || site.name === site.url) {
-          sitesToRefresh.push(site);
+        // 排除已删除或在回收站中的
+        if (Number(site.is_deleted) !== 1 && !site.deleted_at) {
+          allSites.push(site);
         }
       });
     });
 
-    if (sitesToRefresh.length === 0) return;
+    if (allSites.length === 0) return;
 
-    console.log(`发现 ${sitesToRefresh.length} 个站点缺少信息，准备后台补全...`);
+    // 批量同步缓冲区
+    const syncBatch: { id: number; data: Partial<Site> }[] = [];
 
-    // 逐个补全，避免并发过高
-    for (const site of sitesToRefresh) {
+    // 逐个检查和获取信息
+    for (const site of allSites) {
       try {
-        // 再次检查是否已经补全（避免重复请求）
-        if (site.url) {
-          const info = await api.fetchSiteInfo(site.url) as any;
+        if (!site.url) continue;
 
-          if (info.deadLink) {
-            // 检查是否启用了自动清理死链
-            const isAutoCleanEnabled = configs['site.autoCleanDeadLinks'] === 'true';
+        const needsInfo = isAutoCompleteEnabled && (!site.name || !site.description || site.name === site.url);
 
-            if (isAutoCleanEnabled) {
-              console.warn(`检测到死链，且用户开启了自动清理: ${site.url}`);
+        // 只有当需要补全信息，或者是开启了自动清理死链时，才发起 fetch
+        if (needsInfo || isAutoCleanEnabled) {
+          const info = await api.fetchSiteInfoDirectly(site.url);
 
-              // 1. 添加自动删除备注
-              const autoNote = `系统自动识别：该网站打不开（${new Date().toLocaleString()}），已自动移动到回收站`;
-              const updatedNote = site.notes ? `${site.notes}\n\n${autoNote}` : autoNote;
+          // 1. 处理死链清理 (如果开启且检测到死链)
+          if (isAutoCleanEnabled && info.deadLink) {
+            // 添加自动删除备注并移动到回收站
+            const autoNote = `系统自动识别：该网站打不开（${new Date().toLocaleString()}），已自动移动到回收站`;
+            const updatedNote = site.notes ? `${site.notes}\n\n${autoNote}` : autoNote;
 
-              // 2. 先更新备注，再删除（删除其实是移动到回收站）
-              await api.updateSite(site.id!, { notes: updatedNote });
-              await api.deleteSite(site.id!);
+            await api.updateSite(site.id!, { notes: updatedNote });
+            await api.deleteSite(site.id!);
 
-              // 3. 同步更新本地状态，从界面移除
-              setGroups(prev => prev.map(g => ({
-                ...g,
-                sites: g.sites.filter(s => s.id !== site.id)
-              })));
-
-              handleError(`自动清理死链: ${site.name || site.url} (已移至回收站)`);
-            } else {
-              console.log(`检测到可能失效的链接，但自动清理未开启，跳过处理: ${site.url}`);
-            }
-            continue; // 继续下一个
+            // 同步更新本地状态，从界面移除
+            setGroups(prev => prev.map(g => ({
+              ...g,
+              sites: g.sites.filter(s => s.id !== site.id)
+            })));
+            continue; // 处理完死链跳过后续逻辑
           }
 
-          if (info.success && (info.name || info.description)) {
+          // 2. 处理信息补全 (如果开启且抓取成功)
+          if (isAutoCompleteEnabled && info.success && (info.name || info.description)) {
             const updatedData: Partial<Site> = {
               name: site.name || info.name || '',
               description: site.description || info.description || '',
             };
 
-            // 提交更新到服务器
-            await api.updateSite(site.id!, updatedData);
+            syncBatch.push({ id: site.id!, data: updatedData });
 
-            // 同步更新本地状态，让 UI 实时响应
-            setGroups(prev => prev.map(g => ({
-              ...g,
-              sites: g.sites.map(s => s.id === site.id ? { ...s, ...updatedData } : s)
-            })));
+            // 达到批量大小或到达最后一个
+            if (syncBatch.length >= 5 || site === allSites[allSites.length - 1]) {
+              const success = await api.batchSyncSiteInfo([...syncBatch]);
 
-            console.log(`后台自动补全成功: ${site.url}`);
+              if (success) {
+                const currentBatch = [...syncBatch];
+                setGroups(prev => prev.map(g => ({
+                  ...g,
+                  sites: g.sites.map(s => {
+                    const update = currentBatch.find(ub => ub.id === s.id);
+                    return update ? { ...s, ...update.data } : s;
+                  })
+                })));
+              }
+              syncBatch.length = 0;
+            }
           }
         }
-        // 每个请求之间稍微停顿一下，友好访问
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // 适当延时
+        await new Promise(resolve => setTimeout(resolve, 1500));
       } catch (err) {
-        console.warn(`后台自动补全失败 [${site.url}]:`, err);
+        // 静默处理
       }
     }
-  }, [groups, configs, api, isAdmin]);
+  }, [isAuthenticated, configs, groups, api]);
+
+  // 数据同步栅栏控制
+  useEffect(() => {
+    if (isDataSynced && isAuthenticated) {
+      // 数据完全同步后，后台启动维护任务
+      scavengeSiteInfo();
+    }
+  }, [isDataSynced, isAuthenticated]); // 仅在同步状态改变且已认证时执行一次
 
   // 计算总书签数（排除回收站/已删除项目）
   const totalBookmarkCount = useMemo(() => {
