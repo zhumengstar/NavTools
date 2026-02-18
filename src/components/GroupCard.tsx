@@ -16,15 +16,9 @@ import {
   Typography,
   Button,
   Box,
-  Fade,
+  IconButton,
   Tooltip,
-  Checkbox,
-  Menu,
-  MenuItem,
-  Divider,
-  Backdrop,
-  CircularProgress,
-  LinearProgress,
+  Collapse,
 } from '@mui/material';
 
 import AddIcon from '@mui/icons-material/Add';
@@ -35,9 +29,6 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import DeselectIcon from '@mui/icons-material/Deselect';
 import CloseIcon from '@mui/icons-material/Close';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import RecommendIcon from '@mui/icons-material/Recommend';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 // 可拖放的分组容器组件
 function DroppableGroupContainer({
@@ -102,10 +93,8 @@ interface GroupCardProps {
   configs?: Record<string, string>; // 传入配置
 
   draggedSiteId?: string | null; // 当前拖拽的站点ID
-  onBatchDelete?: (siteIds: number[]) => Promise<void> | void; // 新增：批量删除回调
-  onBatchFeaturedUpdate?: (siteIds: number[], isFeatured: number) => Promise<void> | void; // 新增：批量更新精选状态回调
-  onBatchAutoFulfill?: (siteIds: number[]) => Promise<void> | void; // 新增：批量自动补全回调
-  onBatchMove?: (siteIds: number[], targetGroupId: number) => Promise<void> | void; // 新增：批量移动回调
+  onBatchDelete?: (siteIds: number[]) => void; // 新增：批量删除回调
+  onBatchFeaturedUpdate?: (siteIds: number[], isFeatured: number) => void; // 新增：批量更新精选状态回调
   onSiteClick?: (siteId: number) => void; // 新增：站点点击回调
   onSettingsOpen?: (siteId: number) => Promise<void> | void; // 新增：打开设置回调
   globalToggleVersion?: { type: 'expand' | 'collapse'; ts: number }; // 新增：全局切换指令
@@ -128,8 +117,6 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
   draggedSiteId,
   onBatchDelete,
   onBatchFeaturedUpdate,
-  onBatchAutoFulfill,
-  onBatchMove,
   globalToggleVersion,
   index, // 解构 index
   isAdmin, // 解构 isAdmin
@@ -139,16 +126,6 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
   // 批量操作相关状态
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedSiteIds, setSelectedSiteIds] = useState<Set<number>>(new Set());
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null); // For batch actions menu
-  const openBatchMenu = Boolean(anchorEl);
-
-  const handleOpenBatchMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleCloseBatchMenu = () => {
-    setAnchorEl(null);
-  };
 
   // 切换选中状态
   const handleToggleSelection = (siteId: number) => {
@@ -176,7 +153,6 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
   const handleExitBatchMode = () => {
     setIsBatchMode(false);
     setSelectedSiteIds(new Set());
-    handleCloseBatchMenu();
   };
 
   // 执行批量删除
@@ -193,15 +169,6 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
     if (selectedSiteIds.size === 0) return;
     if (onBatchFeaturedUpdate) {
       onBatchFeaturedUpdate(Array.from(selectedSiteIds), isFeatured);
-      handleExitBatchMode();
-    }
-  };
-
-  // 批量自动补全
-  const handleBatchAutoFulfillClick = () => {
-    if (selectedSiteIds.size === 0) return;
-    if (onBatchAutoFulfill) {
-      onBatchAutoFulfill(Array.from(selectedSiteIds));
       handleExitBatchMode();
     }
   };
@@ -510,49 +477,38 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
                     </Button>
                     <Button
                       variant='contained'
-                      color='primary'
+                      color='error'
                       size='small'
-                      onClick={handleOpenBatchMenu}
+                      onClick={handleBatchDeleteClick}
                       disabled={selectedSiteIds.size === 0}
-                      endIcon={<ExpandMoreIcon />}
+                      startIcon={<DeleteSweepIcon />}
                     >
-                      批量操作 ({selectedSiteIds.size})
+                      删除选中 ({selectedSiteIds.size})
                     </Button>
-                    <Menu
-                      anchorEl={anchorEl}
-                      open={openBatchMenu}
-                      onClose={handleCloseBatchMenu}
-                      MenuListProps={{
-                        'aria-labelledby': 'batch-actions-button',
-                      }}
-                    >
-                      <MenuItem onClick={handleBatchDeleteClick} disabled={selectedSiteIds.size === 0} sx={{ color: 'error.main' }}>
-                        <DeleteSweepIcon fontSize="small" sx={{ mr: 1 }} />
-                        删除选中
-                      </MenuItem>
-                      {(isAdmin || configs?.isAdmin === 'true') && (
-                        <>
-                          <MenuItem onClick={() => handleBatchFeaturedClick(1)} disabled={selectedSiteIds.size === 0}>
-                            <RecommendIcon fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
-                            设为精选
-                          </MenuItem>
-                          <MenuItem onClick={() => handleBatchFeaturedClick(0)} disabled={selectedSiteIds.size === 0}>
-                            <RecommendIcon fontSize="small" sx={{ mr: 1, opacity: 0.7 }} />
-                            取消精选
-                          </MenuItem>
-                          <Divider />
-                          <MenuItem onClick={handleBatchAutoFulfillClick} disabled={selectedSiteIds.size === 0}>
-                            <AutoFixHighIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
-                            <Typography color="primary.main">自动补全缺失信息</Typography>
-                          </MenuItem>
-                        </>
-                      )}
-                      <Divider />
-                      <MenuItem onClick={handleExitBatchMode}>
-                        <CloseIcon fontSize="small" sx={{ mr: 1 }} />
-                        取消批量操作
-                      </MenuItem>
-                    </Menu>
+                    {(isAdmin || configs?.isAdmin === 'true') && (
+                      <>
+                        <Button
+                          variant='contained'
+                          color='warning'
+                          size='small'
+                          onClick={() => handleBatchFeaturedClick(1)}
+                          disabled={selectedSiteIds.size === 0}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          设为精选
+                        </Button>
+                        <Button
+                          variant='outlined'
+                          color='warning'
+                          size='small'
+                          onClick={() => handleBatchFeaturedClick(0)}
+                          disabled={selectedSiteIds.size === 0}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          取消精选
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant='outlined'
                       color='inherit'
