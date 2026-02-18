@@ -605,13 +605,17 @@ function App() {
       if (!result) {
         // 未认证，设置为访客模式
         console.log('未认证，设置访客模式');
-        api.isAuthenticated = false; // 同步 API 客户端状态
+        api.isAuthenticated = false;
         setIsAuthenticated(false);
         setIsAdmin(false);
         setViewMode('readonly');
+        setUsername('User');
+        setAvatarUrl(null);
 
-        // 注意：这里不再主动清空 groups，以便在刷新瞬间保持本地数据的可见性
-        // 由 fetchData 根据 API 返回值决定最终内容
+        // 清空所有登录相关缓存，防止过期登录状态残留
+        localStorage.removeItem(CACHE_DATA_KEY);
+        localStorage.removeItem(CACHE_PROFILE_KEY);
+        setGroups([]);
       } else {
         // 已认证，设置为编辑模式
         console.log('认证成功');
@@ -847,18 +851,18 @@ function App() {
 
     await api.logout();
     setIsAuthenticated(false);
-    setUsername('User'); // 重置用户名
-    setAvatarUrl(null); // 重置头像
-    setIsAdmin(false); // 显式重置管理员权限
+    setUsername('User');
+    setAvatarUrl(null);
+    setIsAdmin(false);
 
-    setViewMode('readonly'); // 切换到只读模式
+    setViewMode('readonly');
 
-    // 登出后清空数据，显示访客主页
+    // 登出后清空所有缓存和数据
     setGroups([]);
     localStorage.removeItem(CACHE_DATA_KEY);
-    // await fetchData(); // 不再加载公开数据
-    await fetchConfigs(); // 配置可能需要重置（如标题等）
-    localStorage.removeItem(CACHE_PROFILE_KEY); // 清除用户资料缓存
+    localStorage.removeItem(CACHE_PROFILE_KEY);
+    localStorage.removeItem(CACHE_CONFIG_KEY);
+    await fetchConfigs();
   }, [api, fetchConfigs]);
 
   useEffect(() => {
