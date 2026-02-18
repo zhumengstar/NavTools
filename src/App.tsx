@@ -2084,7 +2084,8 @@ function App() {
 
       // 从 startGroupIndex 开始遍历（断点续传）
       for (let gi = startGroupIndex; gi < bookmarkGroups.length; gi++) {
-        const bookmarkGroup = bookmarkGroups[gi];
+        const bookmarkGroup = bookmarkGroups[gi] as BookmarkGroup | undefined;
+        if (!bookmarkGroup) continue;
         if (isImportCancelled.current) {
           clearImportTask();
           setImportLoading(false);
@@ -2160,8 +2161,8 @@ function App() {
           const currentChunk = bookmarks.slice(j, j + chunkSize);
 
           const sitesToImport = currentChunk
-            .filter(b => b && b.url && !existingUrls.has(normalizeUrl(b.url)))
-            .map(b => ({
+            .filter((b: any) => b && b.url && !existingUrls.has(normalizeUrl(b.url)))
+            .map((b: any) => ({
               group_id: currentTargetGroupId as number,
               name: b.title || extractDomain(b.url) || 'New Site',
               url: b.url,
