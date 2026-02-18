@@ -1485,6 +1485,115 @@ export default {
                         }
                     }
 
+                    // 批量维护站点 (后端执行，不受 CORS 限制，支持静默模式)
+                    else if (path === "sites/batch-maintenance" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return createResponse("未认证", request, { status: 401 });
+                        }
+
+                        const payload = await validateRequestBody(request) as {
+                            ids: number[];
+                            autoComplete?: boolean;
+                            autoClean?: boolean;
+                            silent?: boolean;
+                        };
+
+                        const { ids, autoComplete, autoClean, silent: isSilent } = payload;
+
+                        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+                            return createJsonResponse({ success: false, message: "站点 ID 列表不能为空" }, request, { status: 400 });
+                        }
+
+                        const results: { id: number; success: boolean; data?: Partial<Site>; deadLink?: boolean }[] = [];
+
+                        // 循环处理站点
+                        for (const id of ids) {
+                            try {
+                                const site = await api.getSite(id);
+                                if (!site || site.user_id !== currentUserId) continue;
+
+                                let siteInfo: any = { success: false };
+
+                                // 如果启用了补全或死链检查
+                                if ((autoComplete || autoClean) && site.url) {
+                                    try {
+                                        const fetchResponse = await fetch(site.url, {
+                                            headers: {
+                                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+                                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                                            },
+                                            redirect: "follow",
+                                            signal: AbortSignal.timeout(5000)
+                                        });
+
+                                        if (fetchResponse.ok) {
+                                            let title = "";
+                                            let description = "";
+                                            let icon = "";
+
+                                            const rewriter = new HTMLRewriter()
+                                                .on("title", { text(t) { title += t.text; } })
+                                                .on("meta[name='description'], meta[name='Description'], meta[property='og:description']", {
+                                                    element(e) { if (!description) description = e.getAttribute("content") || ""; }
+                                                })
+                                                .on("link[rel*='icon']", {
+                                                    element(e) {
+                                                        if (!icon) {
+                                                            const href = e.getAttribute("href");
+                                                            if (href) {
+                                                                try { icon = new URL(href, site.url).toString(); } catch { icon = href; }
+                                                            }
+                                                        }
+                                                    }
+                                                });
+
+                                            await rewriter.transform(fetchResponse).arrayBuffer();
+                                            siteInfo = {
+                                                success: true,
+                                                name: title.trim().slice(0, 100),
+                                                description: description.trim().slice(0, 500),
+                                                icon
+                                            };
+                                        } else {
+                                            siteInfo = { success: false, deadLink: fetchResponse.status >= 400 && fetchResponse.status < 600 };
+                                        }
+                                    } catch (fetchErr) {
+                                        siteInfo = { success: false, deadLink: true };
+                                    }
+                                }
+
+                                // 1. 处理死链清理
+                                if (autoClean && siteInfo.deadLink) {
+                                    const autoNote = `系统自动识别：该网站打不开（${new Date().toLocaleString()}），已自动移动到回收站`;
+                                    const updatedNote = site.notes ? `${site.notes}\n\n${autoNote}` : autoNote;
+
+                                    await api.updateSite(id, { notes: updatedNote });
+                                    await api.deleteSite(id);
+                                    results.push({ id, success: true, deadLink: true });
+                                    continue;
+                                }
+
+                                // 2. 处理信息补全
+                                if (autoComplete && siteInfo.success && (siteInfo.name || siteInfo.description)) {
+                                    const updatedData = {
+                                        name: site.name || siteInfo.name || "",
+                                        description: site.description || siteInfo.description || "",
+                                    };
+                                    await api.updateSite(id, updatedData);
+                                    results.push({ id, success: true, data: updatedData });
+                                }
+
+                            } catch (e) {
+                                if (!isSilent) console.error(`[Batch Maintenance] Failed for ID ${id}:`, e);
+                            }
+
+                            // 适当延时，防止触发目标网站的反爬
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+
+                        return createJsonResponse({ success: true, results }, request);
+                    }
+
                     // 批量获取书签图标
                     else if (path === "utils/batch-update-icons" && method === "POST") {
                         if (!isAuthenticated || !currentUserId) {

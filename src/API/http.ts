@@ -67,6 +67,7 @@ export interface Site {
   is_deleted?: number;
   deleted_at?: string;
   is_featured?: number; // 0 = 正常, 1 = 精选（仅访客可见）
+  user_id?: number; // 归属用户ID
 }
 
 // 分组及其站点 (用于优化 N+1 查询)

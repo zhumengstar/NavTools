@@ -625,6 +625,15 @@ export class NavigationClient {
     });
     return response;
   }
+
+  // 批量维护站点 (后端执行，不受 CORS 限制)
+  async batchMaintenance(ids: number[], options: { autoComplete?: boolean; autoClean?: boolean; silent?: boolean } = {}): Promise<{ success: boolean; results: any[] }> {
+    if (!ids || ids.length === 0) return { success: true, results: [] };
+    return this.request('sites/batch-maintenance', {
+      method: 'POST',
+      body: JSON.stringify({ ids, ...options }),
+    });
+  }
 }
 
 /**
@@ -681,4 +690,5 @@ export class MockNavigationClient {
   async fetchSiteInfo() { return { success: true }; }
   async fetchSiteInfoDirectly() { return { success: false, message: 'Mock' }; }
   async batchUpdateIcons() { return { success: true, count: 0 }; }
+  async batchMaintenance() { return { success: true, results: [] }; }
 }

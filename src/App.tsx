@@ -1051,75 +1051,44 @@ function App() {
 
     if (allSites.length === 0) return;
 
-    // 批量同步缓冲区
-    const syncBatch: { id: number; data: Partial<Site> }[] = [];
-
-    // 逐个检查和获取信息
-    for (const site of allSites) {
-      try {
-        if (!site.url) continue;
-
+    // 筛选出需要维护的站点 ID
+    const sitesToMaintainIds = allSites
+      .filter(site => {
         const needsInfo = isAutoCompleteEnabled && (!site.name || !site.description || site.name === site.url);
+        return needsInfo || isAutoCleanEnabled;
+      })
+      .map(site => site.id!)
+      .slice(0, 20); // 每次处理前 20 个，防止后端超时
 
-        // 只有当需要补全信息，或者是开启了自动清理死链时，才发起 fetch
-        if (needsInfo || isAutoCleanEnabled) {
-          // 策略：优先前端直接抓取 (零压力)
-          let info = await api.fetchSiteInfoDirectly(site.url);
+    if (sitesToMaintainIds.length === 0) return;
 
-          // 如果前端因为跨域 (CORS) 失败，则请求后端备选接口 (静默模式，不留日志)
-          if (!info.success && !info.deadLink) {
-            info = await api.fetchSiteInfo(site.url, { silent: true });
-          }
+    try {
+      // 一次性交给后端批量处理（静默模式）
+      const response = await api.batchMaintenance(sitesToMaintainIds, {
+        autoComplete: isAutoCompleteEnabled,
+        autoClean: isAutoCleanEnabled,
+        silent: true
+      });
 
-          // 1. 处理死链清理 (如果开启且检测到死链)
-          if (isAutoCleanEnabled && info.deadLink) {
-            // 添加自动删除备注并移动到回收站
-            const autoNote = `系统自动识别：该网站打不开（${new Date().toLocaleString()}），已自动移动到回收站`;
-            const updatedNote = site.notes ? `${site.notes}\n\n${autoNote}` : autoNote;
-
-            await api.updateSite(site.id!, { notes: updatedNote });
-            await api.deleteSite(site.id!);
-
-            // 同步更新本地状态，从界面移除
-            setGroups(prev => prev.map(g => ({
-              ...g,
-              sites: g.sites.filter(s => s.id !== site.id)
-            })));
-            continue; // 处理完死链跳过后续逻辑
-          }
-
-          // 2. 处理信息补全 (如果开启且抓取成功)
-          if (isAutoCompleteEnabled && info.success && (info.name || info.description)) {
-            const updatedData: Partial<Site> = {
-              name: site.name || info.name || '',
-              description: site.description || info.description || '',
-            };
-
-            syncBatch.push({ id: site.id!, data: updatedData });
-
-            // 达到批量大小或到达最后一个
-            if (syncBatch.length >= 5 || site === allSites[allSites.length - 1]) {
-              const success = await api.batchSyncSiteInfo([...syncBatch]);
-
-              if (success) {
-                const currentBatch = [...syncBatch];
-                setGroups(prev => prev.map(g => ({
-                  ...g,
-                  sites: g.sites.map(s => {
-                    const update = currentBatch.find(ub => ub.id === s.id);
-                    return update ? { ...s, ...update.data } : s;
-                  })
-                })));
-              }
-              syncBatch.length = 0;
-            }
-          }
-        }
-        // 适当延时
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      } catch (err) {
-        // 静默处理
+      if (response.success && response.results) {
+        // 同步更新本地状态
+        setGroups(prev => prev.map(g => ({
+          ...g,
+          sites: g.sites
+            .filter(s => {
+              // 过滤掉被后端自动删除（死链）的站点
+              const result = response.results.find((r: any) => r.id === s.id);
+              return !(result && result.deadLink);
+            })
+            .map(s => {
+              // 更新补全了信息的站点
+              const result = response.results.find((r: any) => r.id === s.id);
+              return (result && result.data) ? { ...s, ...result.data } : s;
+            })
+        })));
       }
+    } catch (err) {
+      // 静默处理
     }
   }, [isAuthenticated, configs, groups, api]);
 
