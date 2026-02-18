@@ -2135,30 +2135,17 @@ function App() {
 
           for (let k = 0; k < currentChunk.length; k++) {
             const bookmark = currentChunk[k];
+            if (!bookmark) continue;
             const currentNormalizedUrl = normalizeUrl(bookmark.url);
 
             if (existingUrls.has(currentNormalizedUrl)) {
               sitesSkipped++;
             } else {
-              const siteName = bookmark.title || extractDomain(bookmark.url) || 'New Site';
+              // const siteName = bookmark.title || extractDomain(bookmark.url) || 'New Site';
 
               // 构造后端需要的批量导入格式
-              const importPayload = {
-                groups: [{
-                  id: targetGroup.id as number,
-                  name: groupName,
-                  order_num: targetGroup.order_num,
-                  is_public: 1
-                }],
-                sites: [{
-                  group_id: targetGroup.id as number,
-                  name: siteName,
-                  url: bookmark.url,
-                  order_num: maxOrderNum++,
-                  is_public: 1
-                }],
-                configs: {}
-              };
+              // 构造后端需要的批量导入格式 (暂不使用，使用下方批量提交)
+              // const importPayload = { ... };
 
               try {
                 // 真正的批量提交（虽然这里是 chunk 内部的一组，但后端 importData 本身已优化）
@@ -2176,7 +2163,10 @@ function App() {
               name: b.title || extractDomain(b.url) || 'New Site',
               url: b.url,
               order_num: maxOrderNum++,
-              is_public: 1
+              is_public: 1,
+              icon: '',
+              description: '',
+              notes: ''
             }));
 
           if (sitesToImport.length > 0) {
@@ -2189,7 +2179,9 @@ function App() {
                   is_public: 1
                 }],
                 sites: sitesToImport,
-                configs: {}
+                configs: {},
+                version: '1.0',
+                exportDate: new Date().toISOString()
               });
 
               if (batchResult.success && batchResult.stats) {
@@ -2267,7 +2259,7 @@ function App() {
 
       // 书签统计
       const actualSitesCreated = sitesCreated;
-      const actualSitesSkipped = sitesSkipped;
+      // const actualSitesSkipped = sitesSkipped;
 
       const summary = [
         `Chrome 书签导入完成！`,

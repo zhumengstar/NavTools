@@ -82,7 +82,7 @@ const GroupSelectorDialog: React.FC<GroupSelectorDialogProps> = ({
                             <ListItemButton
                                 key={group.id}
                                 selected={selectedGroupId === group.id}
-                                onClick={() => setSelectedGroupId(group.id)}
+                                onClick={() => setSelectedGroupId(group.id || 0)}
                             >
                                 <ListItemIcon>
                                     <FolderIcon color={selectedGroupId === group.id ? "primary" : "action"} />

@@ -38,7 +38,6 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 const RecycleBin = React.lazy(() => import('./RecycleBin'));
 import { Site, Group } from '../API/http';
