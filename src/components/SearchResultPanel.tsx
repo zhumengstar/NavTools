@@ -91,6 +91,7 @@ const SearchResultPanel: React.FC<SearchResultPanelProps> = ({
             mt: 1,
             maxHeight: '400px',
             overflowY: 'auto',
+            overscrollBehavior: 'contain',
             zIndex: 1300,
             borderRadius: 2,
           }}
