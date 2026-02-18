@@ -1097,9 +1097,8 @@ function App() {
       const groupsWithSites = await api.getGroupsWithSites();
       setGroups(groupsWithSites);
 
-      // 书签数据持久化（确保初始化后的第二次真实数据能存入缓存）
-      // 这里的逻辑：如果有数据且是合法用户（或访客态下的公开数据，根据业务需求），则存入
-      if (groupsWithSites && groupsWithSites.length > 0) {
+      // 仅在已认证时缓存数据（防止访客公开数据被缓存导致退出后仍显示用户界面）
+      if (isAuthenticated && groupsWithSites && groupsWithSites.length > 0) {
         saveToCache(CACHE_DATA_KEY, groupsWithSites);
         saveToCache(CACHE_CONFIG_KEY, userConfigs);
       }
