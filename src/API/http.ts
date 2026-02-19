@@ -1416,6 +1416,12 @@ export class NavigationAPI {
     return updatedSite || null;
   }
 
+  // 根据 ID 获取站点
+  async getSiteById(id: number): Promise<Site | null> {
+    const site = await this.db.prepare('SELECT * FROM sites WHERE id = ?').bind(id).first<Site>();
+    return site || null;
+  }
+
   async deleteSite(id: number): Promise<boolean> {
     const result = await this.db.prepare('DELETE FROM sites WHERE id = ?').bind(id).run();
     return result.success;

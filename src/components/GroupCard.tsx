@@ -298,7 +298,6 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
                       onSettingsOpen={onSettingsOpen}
                       isEditMode={true}
                       viewMode={viewMode}
-                      index={idx}
                       iconApi={configs?.['site.iconApi']}
                       isBatchMode={isBatchMode}
                       isSelected={selectedSiteIds.has(site.id as number)}

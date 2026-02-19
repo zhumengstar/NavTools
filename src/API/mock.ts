@@ -1,4 +1,5 @@
 import { Group, Site, LoginResponse, RegisterResponse, ResetPasswordResponse, ExportData, ImportResult, GroupWithSites, SendCodeResponse, UserListItem } from './http';
+import { NavigationClient } from './client';
 import { mockGroups as importedMockGroups, mockSites as importedMockSites, mockConfigs as importedMockConfigs } from './mockData';
 
 // 本地存储键名
@@ -53,12 +54,13 @@ function saveConfigsToStorage(): void {
 }
 
 // 模拟API实现
-export class MockNavigationClient {
+export class MockNavigationClient extends NavigationClient {
   private token: string | null = null;
   public isAuthenticated: boolean = false; // 公开认证状态
-  protected baseUrl: string = '/api';
+  // baseUrl is inherited
 
   constructor() {
+    super(); // 必须调用父类构造函数
     // 从本地存储加载令牌
     if (typeof localStorage !== 'undefined') {
       this.token = localStorage.getItem('auth_token');
@@ -81,7 +83,7 @@ export class MockNavigationClient {
   }
 
   // 清除认证令牌
-  clearToken(): void {
+  async logout(): Promise<void> {
     this.token = null;
     this.isAuthenticated = false;
     if (typeof localStorage !== 'undefined') {
@@ -151,16 +153,7 @@ export class MockNavigationClient {
     };
   }
 
-  // 模拟通用请求方法
-  async request(endpoint: string, options: any = {}): Promise<any> {
-    console.log(`[Mock Request] ${endpoint}`, options);
-    return null;
-  }
 
-  // 登出
-  logout(): void {
-    this.clearToken();
-  }
 
   // 初始化数据库（模拟）
   async initDB(): Promise<void> {
@@ -691,8 +684,8 @@ export class MockNavigationClient {
     return { success: true, name: 'Mock Site (Direct)', description: 'Mock Description', icon: '' };
   }
 
-  async batchUpdateIcons(ids: number[]): Promise<any> {
-    return { success: true, count: ids.length };
+  async batchUpdateIcons(): Promise<{ success: boolean; count: number }> {
+    return { success: true, count: 0 };
   }
 
   // 数据导入

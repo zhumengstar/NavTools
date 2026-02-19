@@ -248,7 +248,7 @@ export class NavigationClient {
     return this.request('groups-with-sites');
   }
 
-  async getGroup(id: number): Promise<Group> {
+  async getGroup(id: number): Promise<Group | null> {
     return this.request(`groups/${id}`);
   }
 
@@ -259,7 +259,7 @@ export class NavigationClient {
     });
   }
 
-  async updateGroup(id: number, group: Partial<Group>): Promise<Group> {
+  async updateGroup(id: number, group: Partial<Group>): Promise<Group | null> {
     return this.request(`groups/${id}`, {
       method: 'PUT',
       body: JSON.stringify(group),
@@ -297,7 +297,7 @@ export class NavigationClient {
     return this.request(endpoint);
   }
 
-  async getSite(id: number): Promise<Site> {
+  async getSite(id: number): Promise<Site | null> {
     return this.request(`sites/${id}`);
   }
 
@@ -308,7 +308,7 @@ export class NavigationClient {
     });
   }
 
-  async updateSite(id: number, site: Partial<Site>): Promise<Site> {
+  async updateSite(id: number, site: Partial<Site>): Promise<Site | null> {
     return this.request(`sites/${id}`, {
       method: 'PUT',
       body: JSON.stringify(site),
