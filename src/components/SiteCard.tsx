@@ -9,10 +9,8 @@ import {
   CardContent,
   CardActionArea,
   Typography,
-  Skeleton,
   IconButton,
   Box,
-  Fade,
   Tooltip,
   Checkbox,
 } from '@mui/material';
@@ -27,7 +25,6 @@ interface SiteCardProps {
   onSiteClick?: (siteId: number) => void; // 新增：点击回调
   isEditMode?: boolean;
   viewMode?: 'readonly' | 'edit'; // 访问模式
-  index?: number;
   iconApi?: string; // 添加iconApi属性
   isBatchMode?: boolean; // 新增：是否处于批量模式
   isSelected?: boolean; // 新增：是否被选中
@@ -43,7 +40,6 @@ const SiteCard = memo(function SiteCard({
   onSiteClick,
   isEditMode = false,
   viewMode = 'edit', // 默认为编辑模式
-  index = 0,
   // iconApi,
   isBatchMode = false,
   isSelected = false,

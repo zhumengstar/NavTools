@@ -683,22 +683,6 @@ export default {
                             );
                         }
                     }
-                    // 批量获取书签图标
-                    else if (path === "utils/batch-update-icons" && method === "POST") {
-                        if (!isAuthenticated || !currentUserId) {
-                            return createResponse("未认证", request, { status: 401 });
-                        }
-                        try {
-                            const result = await api.batchUpdateIcons();
-                            return createJsonResponse(result, request);
-                        } catch (error) {
-                            return createJsonResponse(
-                                { success: false, message: "批量更新图标失败" },
-                                request,
-                                { status: 500 }
-                            );
-                        }
-                    }
                     // 批量同步站点补全信息
                     else if (path === "sites/batch-sync-info" && method === "PUT") {
                         if (!isAuthenticated || !currentUserId) {

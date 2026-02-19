@@ -56,7 +56,7 @@ function saveConfigsToStorage(): void {
 export class MockNavigationClient {
   private token: string | null = null;
   public isAuthenticated: boolean = false; // 公开认证状态
-  private baseUrl: string = '/api';
+  protected baseUrl: string = '/api';
 
   constructor() {
     // 从本地存储加载令牌

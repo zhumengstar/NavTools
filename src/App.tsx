@@ -2726,7 +2726,7 @@ function App() {
             <ActiveLayout
               title={configs['site.name'] || ''}
               configs={configs}
-              bookmarkCount={isAuthenticated ? totalBookmarkCount : undefined}
+              bookmarkCount={isAuthenticated ? (totalBookmarkCount ?? undefined) : undefined}
               headerContent={
                 <Stack
                   direction='row'

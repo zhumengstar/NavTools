@@ -2,7 +2,7 @@ import { Group, Site, LoginResponse, RegisterResponse, ResetPasswordResponse, Ex
 export type { Site };
 
 export class NavigationClient {
-  private baseUrl: string;
+  protected baseUrl: string;
   public isAuthenticated: boolean = false; // 新增：公开认证状态
 
   constructor(baseUrl = '/api') {
