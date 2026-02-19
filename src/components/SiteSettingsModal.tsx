@@ -442,6 +442,9 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
                   value={formData.group_id}
                   label='所属分组'
                   onChange={handleSelectChange}
+                  MenuProps={{
+                    sx: { zIndex: 1500 }
+                  }}
                 >
                   {groups.map((group) => (
                     <MenuItem key={group.id} value={String(group.id)}>

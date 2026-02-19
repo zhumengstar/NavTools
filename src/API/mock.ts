@@ -1,4 +1,4 @@
-import { Group, Site, LoginResponse, RegisterResponse, ResetPasswordResponse, ExportData, ImportResult, GroupWithSites, SendCodeResponse } from './http';
+import { Group, Site, LoginResponse, RegisterResponse, ResetPasswordResponse, ExportData, ImportResult, GroupWithSites, SendCodeResponse, UserListItem } from './http';
 import { mockGroups as importedMockGroups, mockSites as importedMockSites, mockConfigs as importedMockConfigs } from './mockData';
 
 // 本地存储键名
@@ -56,6 +56,7 @@ function saveConfigsToStorage(): void {
 export class MockNavigationClient {
   private token: string | null = null;
   public isAuthenticated: boolean = false; // 公开认证状态
+  private baseUrl: string = '/api';
 
   constructor() {
     // 从本地存储加载令牌
@@ -150,6 +151,12 @@ export class MockNavigationClient {
     };
   }
 
+  // 模拟通用请求方法
+  async request(endpoint: string, options: any = {}): Promise<any> {
+    console.log(`[Mock Request] ${endpoint}`, options);
+    return null;
+  }
+
   // 登出
   logout(): void {
     this.clearToken();
@@ -187,11 +194,11 @@ export class MockNavigationClient {
         if (this.token) {
           const parts = atob(this.token).split(':');
           if (parts.length >= 1) {
-            return { username: parts[0]!, email: `${parts[0]}@example.com`, role: 'user', avatar_url: null };
+            return { username: parts[0]!, email: `${parts[0]}@example.com`, role: 'admin', avatar_url: null };
           }
         }
       } catch { }
-      return { username: 'mockuser', email: 'mockuser@example.com', role: 'user', avatar_url: null };
+      return { username: 'mockuser', email: 'mockuser@example.com', role: 'admin', avatar_url: null };
     }
     throw new Error('未登录');
   }
@@ -654,6 +661,40 @@ export class MockNavigationClient {
     return true;
   }
 
+  async batchMaintenance(ids: number[], options: any = {}): Promise<{ success: boolean; results: any[] }> {
+    console.log('Mock batch maintenance:', ids, options);
+    return { success: true, results: [] };
+  }
+
+  async batchSyncSiteInfo(updates: any[]): Promise<boolean> {
+    console.log('Mock batch sync info:', updates);
+    return true;
+  }
+
+  async getAdminUsers(): Promise<UserListItem[]> {
+    return [
+      { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', avatar_url: null, created_at: new Date().toISOString(), group_count: mockGroups.length, site_count: mockSites.length }
+    ];
+  }
+
+  async getAIModels(): Promise<string[]> {
+    return ['gpt-3.5-turbo', 'gpt-4', 'claude-3-opus'];
+  }
+
+  async fetchSiteInfo(url: string): Promise<any> {
+    console.log('Mock fetch site info:', url);
+    return { success: true, name: 'Mock Site', description: 'Mock Description', icon: '' };
+  }
+
+  async fetchSiteInfoDirectly(url: string): Promise<any> {
+    console.log('Mock fetch site info directly:', url);
+    return { success: true, name: 'Mock Site (Direct)', description: 'Mock Description', icon: '' };
+  }
+
+  async batchUpdateIcons(ids: number[]): Promise<any> {
+    return { success: true, count: ids.length };
+  }
+
   // 数据导入
   async importData(data: ExportData): Promise<ImportResult> {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -830,22 +871,6 @@ export class MockNavigationClient {
     }
 
     return { success: true, reply };
-  }
-
-  // 模拟获取站点信息
-  async fetchSiteInfo(url: string): Promise<{ success: boolean; name?: string; description?: string; message?: string }> {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    console.log('模拟获取站点信息:', url);
-    return {
-      success: true,
-      name: '模拟站点名称',
-      description: '这是一个模拟的站点描述，用于开发环境调试。',
-    };
-  }
-
-  async batchUpdateIcons(): Promise<{ success: boolean; count: number }> {
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    return { success: true, count: mockSites.length };
   }
 
   async batchUpdateSites(ids: number[], data: Partial<Site>): Promise<{ success: boolean; message: string; count: number }> {

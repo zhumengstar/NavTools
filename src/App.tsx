@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import UserManagement from './components/UserManagement';
 import { Portal } from '@mui/material';
 import { NavigationClient } from './API/client';
 import { MockNavigationClient } from './API/mock';
@@ -264,8 +265,9 @@ function App() {
   // 配置状态
   const [configs, setConfigs] = useState<Record<string, string>>(DEFAULT_CONFIGS);
   const [openConfig, setOpenConfig] = useState(false);
-  const [openAdminConfig, setOpenAdminConfig] = useState(false); // New state for Admin Dialog
-  const [tempConfigs, setTempConfigs] = useState<Record<string, string>>(DEFAULT_CONFIGS);
+  const [openAdminConfig, setOpenAdminConfig] = useState(false);
+  const [adminTab, setAdminTab] = useState(0);
+  const [tempConfigs, setTempConfigs] = useState<Record<string, string>>({});
 
   // Ensure document title updates with config
   useEffect(() => {
@@ -2724,7 +2726,7 @@ function App() {
             <ActiveLayout
               title={configs['site.name'] || ''}
               configs={configs}
-              bookmarkCount={(isInitialDataLoaded && isAuthenticated) ? totalBookmarkCount : undefined}
+              bookmarkCount={isAuthenticated ? totalBookmarkCount : undefined}
               headerContent={
                 <Stack
                   direction='row'
@@ -3446,54 +3448,73 @@ function App() {
                   </IconButton>
                 </DialogTitle>
                 <DialogContent>
-                  <DialogContentText sx={{ mb: 2 }}>管理全站配置</DialogContentText>
-                  <Box sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2
-                  }}>
-                    {/* Forgot Password Toggle */}
-                    <Box sx={{ mb: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                      <Typography variant='subtitle1' gutterBottom>
-                        登录设置
-                      </Typography>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={tempConfigs['ui.enableForgotPassword'] !== 'false'}
-                            onChange={(e) =>
-                              setTempConfigs({
-                                ...tempConfigs,
-                                'ui.enableForgotPassword': e.target.checked ? 'true' : 'false',
-                              })
-                            }
-                            color='primary'
-                          />
-                        }
-                        label={
-                          <Box>
-                            <Typography variant='body1'>启用忘记密码功能</Typography>
-                            <Typography variant='caption' color='text.secondary'>
-                              关闭后，登录界面将不再显示“忘记密码”链接
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </Box>
+                  <Tabs
+                    value={adminTab}
+                    onChange={(_e, v) => setAdminTab(v)}
+                    sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+                  >
+                    <Tab label="全局配置" />
+                    <Tab label="用户管理" />
+                  </Tabs>
 
-                    {/* Placeholder for future features */}
-                    <Box sx={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      height: 100,
-                      color: 'text.secondary',
-                      flexDirection: 'column',
-                      gap: 1
-                    }}>
-                      <Typography variant="body2">更多高级管理功能即将上线...</Typography>
+                  {adminTab === 0 && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <DialogContentText sx={{ mb: 2 }}>管理全站配置</DialogContentText>
+                      <Box sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2
+                      }}>
+                        {/* Forgot Password Toggle */}
+                        <Box sx={{ mb: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                          <Typography variant='subtitle1' gutterBottom>
+                            登录设置
+                          </Typography>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={tempConfigs['ui.enableForgotPassword'] !== 'false'}
+                                onChange={(e) =>
+                                  setTempConfigs({
+                                    ...tempConfigs,
+                                    'ui.enableForgotPassword': e.target.checked ? 'true' : 'false',
+                                  })
+                                }
+                                color='primary'
+                              />
+                            }
+                            label={
+                              <Box>
+                                <Typography variant='body1'>启用忘记密码功能</Typography>
+                                <Typography variant='caption' color='text.secondary'>
+                                  关闭后，登录界面将不再显示“忘记密码”链接
+                                </Typography>
+                              </Box>
+                            }
+                          />
+                        </Box>
+
+                        {/* Placeholder for future features */}
+                        <Box sx={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          height: 100,
+                          color: 'text.secondary',
+                          flexDirection: 'column',
+                          gap: 1
+                        }}>
+                          <Typography variant="body2">更多高级管理功能即将上线...</Typography>
+                        </Box>
+                      </Box>
                     </Box>
-                  </Box>
+                  )}
+
+                  {adminTab === 1 && (
+                    <Box sx={{ mt: 2 }}>
+                      <UserManagement api={api} />
+                    </Box>
+                  )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3 }}>
                   <Button onClick={handleCloseAdminConfig} variant='outlined'>

@@ -1412,6 +1412,31 @@ export default {
                         return createJsonResponse(result, request);
                     }
 
+                    // 获取所有用户列表 (管理员专用)
+                    else if (path === "admin/users" && method === "GET") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return createResponse("未认证", request, { status: 401 });
+                        }
+
+                        // 二次校验：确保当前用户是管理员
+                        try {
+                            const profile = await api.getUserProfile(currentUserId);
+                            if (!profile) {
+                                return createResponse("获取用户信息失败", request, { status: 500 });
+                            }
+                            const role = (profile.role || 'user').toLowerCase().trim();
+                            if (role !== 'admin') {
+                                return createResponse("权限不足 (需要管理员权限)", request, { status: 403 });
+                            }
+
+                            const users = await api.getAllUsers();
+                            return createJsonResponse(users, request);
+                        } catch (e) {
+                            console.error('[Admin Users] Failed:', e);
+                            return createErrorResponse(e, request, "获取用户列表");
+                        }
+                    }
+
                     // 获取站点信息 (标题和描述) - 支持静默模式
                     else if (path === "utils/fetch-site-info" && method === "GET") {
                         if (!isAuthenticated) {

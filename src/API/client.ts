@@ -1,4 +1,4 @@
-import { Group, Site, LoginResponse, RegisterResponse, ResetPasswordResponse, ExportData, ImportResult, GroupWithSites, SendCodeResponse } from './http';
+import { Group, Site, LoginResponse, RegisterResponse, ResetPasswordResponse, ExportData, ImportResult, GroupWithSites, SendCodeResponse, UserListItem } from './http';
 export type { Site };
 
 export class NavigationClient {
@@ -211,6 +211,11 @@ export class NavigationClient {
   async getUserProfile(userId?: number): Promise<{ username: string; email: string; role: string; avatar_url: string | null }> {
     const endpoint = userId ? `user/profile?userId=${userId}` : 'user/profile';
     return this.request(endpoint) as Promise<{ username: string; email: string; role: string; avatar_url: string | null }>;
+  }
+
+  // 获取所有用户 (管理员专用)
+  async getAdminUsers(): Promise<UserListItem[]> {
+    return this.request('admin/users');
   }
 
   // 获取用户邮箱（公开接口，用于密码重置）
@@ -691,4 +696,5 @@ export class MockNavigationClient {
   async fetchSiteInfoDirectly() { return { success: false, message: 'Mock' }; }
   async batchUpdateIcons() { return { success: true, count: 0 }; }
   async batchMaintenance() { return { success: true, results: [] }; }
+  async getAdminUsers(): Promise<UserListItem[]> { return []; }
 }
