@@ -1266,6 +1266,39 @@ export default {
                     // 配置相关API
                     else if (path === "configs" && method === "GET") {
                         const configs = await api.getConfigs(currentUserId);
+
+                        // 如果未认证，仅返回特定公共字段
+                        if (!isAuthenticated) {
+                            const PUBLIC_CONFIG_KEYS = [
+                                'site.title',
+                                'site.name',
+                                'site.icon',
+                                'site.keywords',
+                                'site.description',
+                                'site.icp',
+                                'site.footer',
+                                'site.backgroundImage',
+                                'site.backgroundOpacity',
+                                'site.customCss',
+                                'site.iconApi',
+                                'site.searchBoxEnabled',
+                                'site.autoCompleteInfo',
+                                'site.autoCleanDeadLinks',
+                                'ui.style',
+                                'ui.language',
+                                'ui.enableForgotPassword',
+                                'ui.showWeather'
+                            ];
+
+                            const publicConfigs: Record<string, string> = {};
+                            for (const key of PUBLIC_CONFIG_KEYS) {
+                                if (configs[key] !== undefined) {
+                                    publicConfigs[key] = configs[key];
+                                }
+                            }
+                            return createJsonResponse(publicConfigs, request);
+                        }
+
                         return createJsonResponse(configs, request);
                     } else if (path.startsWith("configs/") && method === "GET") {
                         const key = path.substring("configs/".length);

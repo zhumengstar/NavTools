@@ -1134,7 +1134,7 @@ function App() {
 
   const fetchData = useCallback(async (silent = false) => {
     // 核心加固：如果未认证，严禁获取业务数据
-    if (!api.isAuthenticated) return;
+    // if (!api.isAuthenticated) return;
 
     try {
       // 只有在完全没有数据（缓存也没）时且非静默加载才展示 loading
@@ -3567,12 +3567,12 @@ function App() {
                     sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
                   >
                     <Tab label='JSON 数据' value='json' />
-                    <Tab label='Chrome 书签' value='chrome' />
+                    <Tab label='Chrome / Google 书签' value='chrome' />
                   </Tabs>
                   <DialogContentText sx={{ mb: 2, minHeight: 40 }}>
                     {importType === 'json'
                       ? '请选择要导入的JSON文件，导入将覆盖现有数据。'
-                      : '请选择 Chrome 导出的书签 HTML 文件，按文件夹分组导入，同名分组自动合并。'}
+                      : '请选择 Chrome 或 Google 导出的书签 HTML 文件，按文件夹分组导入，同名分组自动合并。'}
                   </DialogContentText>
                   <Box sx={{ mb: 2 }}>
                     <Button
