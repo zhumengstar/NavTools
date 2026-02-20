@@ -4,7 +4,7 @@
  */
 {
     "$schema": "node_modules/wrangler/config-schema.json",
-    "name": "navtools",
+    "name": "mynav",
     "main": "worker/index.ts",
     "compatibility_date": "2026-01-01",
     "compatibility_flags": [
