@@ -142,7 +142,7 @@ const useMockApi = import.meta.env.VITE_USE_MOCK === 'true';
 
 const api = useMockApi
   ? new MockNavigationClient()
-  : new NavigationClient('/api');
+  : new NavigationClient('https://nav.1997121.xyz/api');
 
 // 将全局 api 实例挂载到 window 方便调试和部分组件访问 (可选)
 if (typeof window !== 'undefined') {
@@ -224,7 +224,7 @@ function App() {
   const [groups, setGroups] = useState<GroupWithSites[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>(SortMode.None);
+  const [sortMode, setSortMode] = useState<SortMode>(SortMode.CrossGroupDrag);
   const [currentSortingGroupId, setCurrentSortingGroupId] = useState<number | null>(null);
 
   // 新增认证状态
@@ -968,7 +968,7 @@ function App() {
       setIsLoginOpen(true);
     }
 
-    setSortMode(SortMode.None);
+    // 保持默认的 CrossGroupDrag 模式，不重置为 None
     setCurrentSortingGroupId(null);
   }, []);
 
@@ -2485,16 +2485,9 @@ function App() {
   };
 
   // 打开站点设置时刷新数据
-  const handleSiteSettingsOpen = (siteId: number) => {
-    // 遍历所有分组查找站点
-    for (const group of groups) {
-      const site = group.sites.find(s => s.id === siteId);
-      if (site) {
-        setSiteToSettings(site);
-        setIsSettingsOpen(true);
-        break;
-      }
-    }
+  const handleSiteSettingsOpen = (site: Site) => {
+    setSiteToSettings(site);
+    setIsSettingsOpen(true);
   };
 
   // 批量更新精选状态
@@ -2749,33 +2742,21 @@ function App() {
                   flexWrap='wrap'
                   sx={{ gap: 1 }}
                 >
-                  {sortMode !== SortMode.None ? (
-                    <>
-
-                      {sortMode === SortMode.CrossGroupDrag && (
-                        <Typography
-                          variant='body2'
-                          color='text.secondary'
-                          sx={{ alignSelf: 'center', mr: 1 }}
-                        >
-                          拖动站点到其他分组
-                        </Typography>
-                      )}
-                      <Button
-                        variant='outlined'
-                        color='inherit'
-                        startIcon={<CancelIcon />}
-                        onClick={cancelSort}
-                        size='small'
-                        sx={{
-                          minWidth: 'auto',
-                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                        }}
-                      >
-                        取消编辑
-                      </Button>
-                    </>
-                  ) : (
+                  {sortMode === SortMode.GroupSort && (
+                    <Button
+                      variant='contained'
+                      color='primary'
+                      size='small'
+                      onClick={cancelSort}
+                      sx={{
+                        minWidth: 'auto',
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      }}
+                    >
+                      关闭排序
+                    </Button>
+                  )}
+                  {sortMode === SortMode.None && (
                     <>
                       {viewMode === 'readonly' ? (
                         // 访客模式：隐藏登录按钮 (通过 URL ?login=1 进入)

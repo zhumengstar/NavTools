@@ -27,7 +27,7 @@
         "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[(",
         "EMAIL_API_KEY": "",
         "EMAIL_FROM": "onboarding@resend.dev",
-        "AI_BASE_URL": "https://cliproxy.1997121.xyz",
-        "AI_API_KEY": "WzIw4JJM9ZVx_HAKD1a2O4igBfz65T4x"
+        "AI_BASE_URL": "https://cliproxy.1997121.xyz/v1",
+        "AI_API_KEY": "sk-cLhZ6wffGNE4CvvL0K3L0NfWkFsO4uQ5Mz6XoK7JaFlqJgIp09"
     }
 }

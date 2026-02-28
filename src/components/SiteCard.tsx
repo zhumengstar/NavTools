@@ -29,7 +29,7 @@ interface SiteCardProps {
   isBatchMode?: boolean; // 新增：是否处于批量模式
   isSelected?: boolean; // 新增：是否被选中
   onToggleSelection?: (id: number) => void; // 新增：切换选中回调
-  onSettingsOpen?: (siteId: number) => Promise<void> | void; // 新增：打开设置时的回调
+  onSettingsOpen?: (site: Site) => Promise<void> | void; // 新增：打开设置时的回调
 }
 
 // 使用memo包装组件以减少不必要的重渲染
@@ -123,6 +123,7 @@ const SiteCard = memo(function SiteCard({
       }}
     >
       <Card
+        className="site-card"
         sx={{
           height: '100%',
           minHeight: { xs: 100, sm: 110 }, // 设置固定的最小高度
@@ -134,11 +135,12 @@ const SiteCard = memo(function SiteCard({
           border: '1px solid',
           borderColor: 'divider',
           boxShadow: isDragging ? 8 : 2,
-          '&:hover': !isEditMode
-            ? {
-              boxShadow: 5,
-            }
-            : {},
+          '&:hover': {
+            boxShadow: 5,
+            '& .site-settings-btn': {
+              display: 'flex',
+            },
+          },
           overflow: 'hidden',
           // backgroundColor & backdropFilter handled by MuiCard theme override
           background: (theme) => theme.palette.mode === 'dark'
@@ -156,8 +158,26 @@ const SiteCard = memo(function SiteCard({
               flexDirection: 'column',
             }}
           >
-            <Box position='absolute' top={8} right={8}>
-              <DragIndicatorIcon fontSize='small' color='primary' />
+            <Box position='absolute' top={8} right={8} display='flex' gap={1}>
+              <IconButton
+                size='small'
+                className="site-settings-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onSettingsOpen) {
+                    onSettingsOpen(site);
+                  }
+                }}
+                sx={{
+                  display: 'none',
+                  p: 0.5,
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                  },
+                }}
+              >
+                <SettingsIcon fontSize='small' />
+              </IconButton>
             </Box>
             {/* 图标和名称 */}
             <Box display='flex' alignItems='center' mb={1}>
@@ -484,20 +504,18 @@ const SiteCard = memo(function SiteCard({
             {viewMode === 'edit' && (
               <IconButton
                 size='small'
+                className="site-settings-btn"
                 sx={{
                   position: 'absolute',
                   top: 8,
                   right: 8,
                   zIndex: 1, // 确保在 CardActionArea 之上
+                  display: 'none',
                   bgcolor: 'action.hover',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
+                  transition: 'all 0.2s ease-in-out',
                   p: { xs: 1, sm: 0.5 },
                   '&:hover': {
                     bgcolor: 'action.selected',
-                  },
-                  '.MuiCard-root:hover &': {
-                    opacity: 1,
                   },
                 }}
                 onClick={handleSettingsClick}

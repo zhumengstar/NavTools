@@ -208,9 +208,9 @@ export class NavigationClient {
     }
   }
 
-  async getUserProfile(userId?: number): Promise<{ username: string; email: string; role: string; avatar_url: string | null }> {
+  async getUserProfile(userId?: number): Promise<{ username: string; email: string; role: string; avatar_url: string | null; last_login_at?: string | null }> {
     const endpoint = userId ? `user/profile?userId=${userId}` : 'user/profile';
-    return this.request(endpoint) as Promise<{ username: string; email: string; role: string; avatar_url: string | null }>;
+    return this.request(endpoint) as Promise<{ username: string; email: string; role: string; avatar_url: string | null; last_login_at?: string | null }>;
   }
 
   // 获取所有用户 (管理员专用)

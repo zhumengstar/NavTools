@@ -33,7 +33,6 @@ import EmailIcon from '@mui/icons-material/Email';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SortIcon from '@mui/icons-material/Sort';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'; // New Icon
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -41,6 +40,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 const RecycleBin = React.lazy(() => import('./RecycleBin'));
 import { Site, Group } from '../API/http';
 
@@ -100,6 +100,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
     const [changePwdError, setChangePwdError] = useState<string | null>(null);
     const [changePwdSuccess, setChangePwdSuccess] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string>('');
+    const [lastLoginAt, setLastLoginAt] = useState<string | null>(null);
     const [infoLoading, setInfoLoading] = useState(false);
 
     // 优先从缓存读取头像
@@ -182,6 +183,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
             const profile = await api.getUserProfile?.();
             if (profile) {
                 if (profile.email) setUserEmail(profile.email);
+                if (profile.last_login_at) setLastLoginAt(profile.last_login_at);
                 if (profile.avatar_url) {
                     setLocalAvatarUrl(profile.avatar_url);
                     onAvatarUpdate?.(profile.avatar_url);
@@ -489,12 +491,6 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                     </ListItemIcon>
                     <ListItemText>分组排序</ListItemText>
                 </MenuItem>
-                <MenuItem onClick={() => { handleMenuClose(); onStartCrossGroupDrag(); }} sx={menuItemSx}>
-                    <ListItemIcon>
-                        <SwapHorizIcon fontSize='small' />
-                    </ListItemIcon>
-                    <ListItemText>书签拖动</ListItemText>
-                </MenuItem>
                 <MenuItem onClick={() => { handleMenuClose(); onOpenConfig(); }} sx={menuItemSx}>
                     <ListItemIcon>
                         <SettingsIcon fontSize='small' />
@@ -724,6 +720,16 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                                     primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
                                 />
                                 <Chip label='已登录' color='success' size='small' variant='outlined' />
+                            </ListItem>
+                            <ListItem disablePadding sx={{ py: 0.5 }}>
+                                <ListItemIcon sx={{ minWidth: 36 }}>
+                                    <AccessTimeIcon fontSize='small' color='action' />
+                                </ListItemIcon>
+                                <ListItemText
+                                    primary='最后登录'
+                                    secondary={lastLoginAt ? new Date(lastLoginAt).toLocaleString() : '从未登录'}
+                                    primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
+                                />
                             </ListItem>
                             <Divider sx={{ my: 1 }} />
                             <ListItem disablePadding sx={{ py: 0.5 }}>

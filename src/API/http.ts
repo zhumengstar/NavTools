@@ -173,6 +173,7 @@ export interface UserListItem {
   avatar_url: string | null;
   created_at: string;
   last_login_at: string | null;
+  login_count: number;
   group_count: number;
   site_count: number;
 }
@@ -246,6 +247,11 @@ export class NavigationAPI {
     // 迁移：为 users 表添加 last_login_at 字段
     try {
       await this.db.exec('ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP;');
+    } catch { }
+
+    // 迁移：为 users 表添加 login_count 字段
+    try {
+      await this.db.exec('ALTER TABLE users ADD COLUMN login_count INTEGER DEFAULT 0;');
     } catch { }
 
     // 迁移环境变量中的管理员到 users 表
@@ -452,8 +458,8 @@ export class NavigationAPI {
       if (user) {
         const isPasswordValid = compareSync(loginRequest.password, user.password_hash);
         if (isPasswordValid) {
-          // 更新最后登录时间
-          await this.db.prepare('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?').bind(user.id).run();
+          // 更新最后登录时间和登录次数
+          await this.db.prepare('UPDATE users SET last_login_at = CURRENT_TIMESTAMP, login_count = COALESCE(login_count, 0) + 1 WHERE id = ?').bind(user.id).run();
           const token = await this.generateToken(
             { id: user.id, username: user.username, role: user.role },
             loginRequest.rememberMe || false
@@ -485,7 +491,7 @@ export class NavigationAPI {
   }
 
   // 获取用户信息
-  async getUserProfile(userId?: number): Promise<{ id: number; username: string; email: string | null; role: string; avatar_url: string | null }> {
+  async getUserProfile(userId?: number): Promise<{ id: number; username: string; email: string | null; role: string; avatar_url: string | null; last_login_at: string | null }> {
     const targetId = userId !== undefined ? userId : this.currentUserId;
 
     if (targetId === undefined) {
@@ -494,9 +500,9 @@ export class NavigationAPI {
 
     console.log('[DB GetProfile] Fetching profile for ID:', targetId);
     const user = await this.db
-      .prepare('SELECT id, username, email, role, avatar_url FROM users WHERE id = ?')
+      .prepare('SELECT id, username, email, role, avatar_url, last_login_at FROM users WHERE id = ?')
       .bind(targetId)
-      .first<{ id: number; username: string; email: string | null; role: string; avatar_url: string | null }>();
+      .first<{ id: number; username: string; email: string | null; role: string; avatar_url: string | null; last_login_at: string | null }>();
 
     console.log('[DB GetProfile] Result:', JSON.stringify(user));
 
@@ -522,6 +528,7 @@ export class NavigationAPI {
         u.avatar_url,
         u.created_at,
         u.last_login_at,
+        COALESCE(u.login_count, 0) as login_count,
         (SELECT COUNT(*) FROM groups WHERE user_id = u.id AND (is_deleted = 0 OR is_deleted IS NULL)) as group_count,
         (SELECT COUNT(*) FROM sites s
          JOIN groups g ON s.group_id = g.id
@@ -544,7 +551,7 @@ export class NavigationAPI {
     } catch (e) {
       console.error('[Admin] SQL stats failed, falling back to basic:', e);
       // 极致降级：只获取基础信息
-      const base = await this.db.prepare('SELECT id, username, email, role, avatar_url, created_at FROM users ORDER BY id ASC').all<any>();
+      const base = await this.db.prepare('SELECT id, username, email, role, avatar_url, created_at, COALESCE(login_count, 0) as login_count FROM users ORDER BY id ASC').all<any>();
       return (base.results || []).map(u => ({ ...u, group_count: 0, site_count: 0 }));
     }
   }
@@ -1252,9 +1259,9 @@ export class NavigationAPI {
     groupName: string;
     ownerName: string;
   }[]> {
-    // 确保 groups 和 sites 都是公开的
-    const query = `
-      SELECT 
+    // 首先尝试获取推荐的站点
+    const featuredQuery = `
+      SELECT
         s.id as site_id,
         s.group_id,
         s.name as site_name,
@@ -1277,7 +1284,7 @@ export class NavigationAPI {
       LIMIT ?
     `;
 
-    const result = await this.db.prepare(query).bind(limit).all<{
+    const featuredResult = await this.db.prepare(featuredQuery).bind(limit).all<{
       site_id: number;
       group_id: number;
       site_name: string;
@@ -1294,7 +1301,73 @@ export class NavigationAPI {
       owner_name: string;
     }>();
 
-    return (result.results || []).map(row => ({
+    // 如果有推荐站点，返回推荐站点
+    if (featuredResult.results && featuredResult.results.length > 0) {
+      return this.mapRandomSitesResult(featuredResult.results);
+    }
+
+    // 如果没有推荐站点，返回所有公开站点
+    const publicQuery = `
+      SELECT
+        s.id as site_id,
+        s.group_id,
+        s.name as site_name,
+        s.url as site_url,
+        s.icon as site_icon,
+        s.description as site_description,
+        s.notes as site_notes,
+        s.order_num as site_order,
+        s.is_public as site_is_public,
+        s.last_clicked_at as site_last_clicked_at,
+        s.created_at as site_created_at,
+        s.updated_at as site_updated_at,
+        g.name as group_name,
+        u.username as owner_name
+      FROM sites s
+      JOIN groups g ON s.group_id = g.id
+      JOIN users u ON g.user_id = u.id
+      WHERE s.is_public = 1 AND g.is_public = 1 AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
+      ORDER BY RANDOM()
+      LIMIT ?
+    `;
+
+    const publicResult = await this.db.prepare(publicQuery).bind(limit).all<{
+      site_id: number;
+      group_id: number;
+      site_name: string;
+      site_url: string;
+      site_icon: string;
+      site_description: string;
+      site_notes: string;
+      site_order: number;
+      site_is_public: number;
+      site_last_clicked_at: string | null;
+      site_created_at: string;
+      site_updated_at: string;
+      group_name: string;
+      owner_name: string;
+    }>();
+
+    return this.mapRandomSitesResult(publicResult.results || []);
+  }
+
+  private mapRandomSitesResult(rows: {
+    site_id: number;
+    group_id: number;
+    site_name: string;
+    site_url: string;
+    site_icon: string;
+    site_description: string;
+    site_notes: string;
+    site_order: number;
+    site_is_public: number;
+    site_last_clicked_at: string | null;
+    site_created_at: string;
+    site_updated_at: string;
+    group_name: string;
+    owner_name: string;
+  }[]) {
+    return rows.map(row => ({
       site: {
         id: row.site_id,
         group_id: row.group_id,

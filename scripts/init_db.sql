@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT,
     role TEXT DEFAULT 'user',
     avatar_url TEXT,
+    last_login_at TIMESTAMP,
+    login_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

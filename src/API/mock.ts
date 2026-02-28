@@ -177,7 +177,7 @@ export class MockNavigationClient extends NavigationClient {
   }
 
   // 获取用户信息
-  async getUserProfile(userId?: number): Promise<{ username: string; email: string; role: string; avatar_url: string | null }> {
+  async getUserProfile(userId?: number): Promise<{ username: string; email: string; role: string; avatar_url: string | null; last_login_at?: string | null }> {
     await new Promise((resolve) => setTimeout(resolve, 200));
     // 模拟返回当前用户信息
     if (this.isAuthenticated) {
@@ -187,7 +187,7 @@ export class MockNavigationClient extends NavigationClient {
         if (this.token) {
           const parts = atob(this.token).split(':');
           if (parts.length >= 1) {
-            return { username: parts[0]!, email: `${parts[0]}@example.com`, role: 'admin', avatar_url: null };
+            return { username: parts[0]!, email: `${parts[0]}@example.com`, role: 'admin', avatar_url: null, last_login_at: new Date().toISOString() };
           }
         }
       } catch { }
@@ -666,7 +666,7 @@ export class MockNavigationClient extends NavigationClient {
 
   async getAdminUsers(): Promise<UserListItem[]> {
     return [
-      { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', avatar_url: null, created_at: new Date().toISOString(), group_count: mockGroups.length, site_count: mockSites.length }
+      { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', avatar_url: null, created_at: new Date().toISOString(), last_login_at: new Date().toISOString(), login_count: 42, group_count: mockGroups.length, site_count: mockSites.length }
     ];
   }
 
