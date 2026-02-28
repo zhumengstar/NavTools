@@ -252,7 +252,7 @@ export class MockNavigationClient extends NavigationClient {
   }
 
   // 获取所有分组及其站点 (使用 JOIN 优化,避免 N+1 查询)
-  async getGroupsWithSites(): Promise<GroupWithSites[]> {
+  async getGroupsWithSites(userId?: number): Promise<GroupWithSites[]> {
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     let groups = [...mockGroups];
@@ -266,6 +266,11 @@ export class MockNavigationClient extends NavigationClient {
       sites = sites.filter(
         (site) => site.is_public === 1 && publicGroupIds.includes(site.group_id)
       );
+    }
+
+    // 根据userId过滤（如果提供）
+    if (userId) {
+      groups = groups.filter(group => group.user_id === userId);
     }
 
     // Filter deleted groups and sites
