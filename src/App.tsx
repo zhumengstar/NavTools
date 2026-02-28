@@ -1649,32 +1649,45 @@ function App() {
         }
       }
     }
-    // 处理站点排序 (同组内)
+    // 处理站点排序 (同组内) - 普通模式下也可拖拽
     else if (activeId.startsWith('site-') && overId.startsWith('site-')) {
-      // 只有在 SiteSort 模式且在当前编辑组内才处理
-      if (sortMode === SortMode.SiteSort && currentSortingGroupId) {
-        const activeSiteId = parseInt(activeId.replace('site-', ''));
-        const overSiteId = parseInt(overId.replace('site-', ''));
+      const activeSiteId = parseInt(activeId.replace('site-', ''));
+      const overSiteId = parseInt(overId.replace('site-', ''));
 
-        const currentGroupId = currentSortingGroupId;
-        const groupIndex = groups.findIndex(g => g.id === currentGroupId);
-        if (groupIndex !== -1) {
-          const targetGroup = groups[groupIndex];
-          if (targetGroup) {
-            const oldIndex = targetGroup.sites.findIndex(s => s.id === activeSiteId);
-            const newIndex = targetGroup.sites.findIndex(s => s.id === overSiteId);
+      // 找到站点所在的分组
+      let currentGroupId = currentSortingGroupId;
+      let groupIndex = -1;
 
-            if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-              const newSites = arrayMove(targetGroup.sites, oldIndex, newIndex);
-              const newGroups = [...groups];
-              newGroups[groupIndex] = { ...targetGroup, sites: newSites } as any;
-              setGroups(newGroups);
+      // 如果没有指定分组，遍历找到站点所在的分组
+      if (!currentGroupId) {
+        for (let i = 0; i < groups.length; i++) {
+          const group = groups[i];
+          if (group.sites.some(s => s.id === activeSiteId)) {
+            currentGroupId = group.id;
+            groupIndex = i;
+            break;
+          }
+        }
+      } else {
+        groupIndex = groups.findIndex(g => g.id === currentGroupId);
+      }
 
-              // 自动保存站点顺序
-              handleSaveSiteOrder(currentGroupId!, newSites).catch(err => {
-                console.error('自动保存站点排序失败:', err);
-              });
-            }
+      if (groupIndex !== -1 && currentGroupId) {
+        const targetGroup = groups[groupIndex];
+        if (targetGroup) {
+          const oldIndex = targetGroup.sites.findIndex(s => s.id === activeSiteId);
+          const newIndex = targetGroup.sites.findIndex(s => s.id === overSiteId);
+
+          if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+            const newSites = arrayMove(targetGroup.sites, oldIndex, newIndex);
+            const newGroups = [...groups];
+            newGroups[groupIndex] = { ...targetGroup, sites: newSites } as any;
+            setGroups(newGroups);
+
+            // 自动保存站点顺序
+            handleSaveSiteOrder(currentGroupId, newSites).catch(err => {
+              console.error('自动保存站点排序失败:', err);
+            });
           }
         }
       }

@@ -55,10 +55,10 @@ const SiteCard = memo(function SiteCard({
     setImageLoaded(false);
   }, [site.icon]);
 
-  // 使用dnd-kit的useSortable hook
+  // 使用dnd-kit的useSortable hook - 始终启用拖拽（除批量模式外）
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `site-${site.id}`, // 使用稳定的 id
-    disabled: !isEditMode || isBatchMode, // 批量模式下禁用拖拽
+    disabled: isBatchMode, // 仅批量模式下禁用拖拽
   });
 
   const style = {
