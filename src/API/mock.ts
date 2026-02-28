@@ -671,7 +671,7 @@ export class MockNavigationClient extends NavigationClient {
   }
 
   async getAIModels(): Promise<string[]> {
-    return ['gpt-3.5-turbo', 'gpt-4', 'claude-3-opus'];
+    return ['gemini-3.1-pro-high', 'kimi-k2.5', 'claude-sonnet-4-6', 'gemini-2.5-flash'];
   }
 
   async fetchSiteInfo(url: string): Promise<any> {

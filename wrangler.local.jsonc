@@ -24,6 +24,10 @@
         "AUTH_REQUIRED_FOR_READ": "false",
         "AUTH_USERNAME": "admin",
         "AUTH_PASSWORD": "$2y$10$vumnTIayAfQ1im0p2BrBI.u1qHPGb0L7AINytmRTFzctFwaUouHXa",
-        "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[("
+        "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[(",
+        "EMAIL_API_KEY": "",
+        "EMAIL_FROM": "onboarding@resend.dev",
+        "AI_BASE_URL": "https://cliproxy.1997121.xyz",
+        "AI_API_KEY": "WzIw4JJM9ZVx_HAKD1a2O4igBfz65T4x"
     }
 }

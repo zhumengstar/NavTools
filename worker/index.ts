@@ -1742,13 +1742,7 @@ export default {
 
                     // AI 模型列表路由
                     if (path === "ai/models" && method === "GET") {
-                        const CF_MODELS = [
-                            { id: '@cf/zai-org/glm-4.7-flash', name: 'GLM 4 Flash', capabilities: { function_calling: false } },
-                            { id: '@cf/meta/llama-3.1-8b-instruct', name: 'Llama 3.1 8B', capabilities: { function_calling: true } },
-                            { id: '@cf/qwen/qwen1.5-14b-chat-awq', name: 'Qwen 1.5 14B', capabilities: { function_calling: false } },
-                            { id: '@cf/google/gemma-7b-it', name: 'Gemma 7B', capabilities: { function_calling: false } },
-                            { id: '@cf/microsoft/phi-2', name: 'Phi-2', capabilities: { function_calling: false } }
-                        ];
+                        const CF_MODELS: any[] = [];
 
                         let externalModels: any[] = [];
                         console.log('[Worker Debug] Checking external models config:', {
@@ -1807,8 +1801,13 @@ export default {
                                                 id.includes('gpt-4') ||
                                                 id.includes('gpt-3.5-turbo') ||
                                                 id.includes('claude-3') ||
+                                                id.includes('claude-4') ||
+                                                id.includes('claude-opus') ||
+                                                id.includes('claude-sonnet') ||
                                                 id.includes('mistral-large') ||
                                                 id.includes('llama-3') ||
+                                                id.includes('gemini-') ||
+                                                id.includes('kimi') ||
                                                 id.includes('command-r');
 
                                             return {
@@ -1850,7 +1849,7 @@ export default {
                         };
 
                         // 模型配置 - 切换模型时只需修改这里
-                        const selectedModel = body.model || '@cf/zai-org/glm-4.7-flash';
+                        const selectedModel = body.model || 'gemini-3.1-pro-high';
 
                         // --- 额度查验与重置系统 ---
                         // 如果未启用认证且由访客访问，我们默认根据 IP 或 ID=1 进行限制 (此处按 ID=1 处理)
@@ -1876,10 +1875,13 @@ export default {
                             const lowerId = modelId.toLowerCase();
                             if (lowerId.includes('128k') || lowerId.includes('gpt-4-turbo') || lowerId.includes('gpt-4o')) return 128000;
                             if (lowerId.includes('claude-3')) return 200000; // Claude 3 Haiku/Sonnet/Opus usually 200k
+                            if (lowerId.includes('gemini-3.1') || lowerId.includes('gemini-3-pro')) return 1000000; // Gemini 3.1/3 Pro
+                            if (lowerId.includes('gemini-2.5')) return 1000000; // Gemini 2.5 Flash
                             if (lowerId.includes('gemini-1.5')) return 1000000; // Gemini 1.5 Pro/Flash
+                            if (lowerId.includes('kimi-k2') || lowerId.includes('moonshot')) return 128000; // Kimi/Moonshot
+                            if (lowerId.includes('claude-sonnet-4') || lowerId.includes('claude-opus-4')) return 200000; // Claude 4
+                            if (lowerId.includes('claude-3')) return 200000; // Claude 3
                             if (lowerId.includes('glm-4')) return 131072; // GLM-4 128k
-                            if (lowerId.includes('moonshot-v1-32k')) return 32000;
-                            if (lowerId.includes('moonshot-v1-128k')) return 128000;
                             if (lowerId.includes('deepseek') && !lowerId.includes('7b')) return 32000; // DeepSeek often 32k
                             if (lowerId.includes('llama-3.1-8b')) return 128000; // Llama 3.1 8B supports 128k
                             if (lowerId.includes('qwen1.5-14b')) return 32000;

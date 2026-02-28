@@ -356,9 +356,10 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
             '#f57c00', '#0097a7', '#5d4037', '#455a64',
             '#e91e63', '#00838f', '#6a1b9a', '#ef6c00',
         ];
+        const safeUsername = username || '';
         let hash = 0;
-        for (let i = 0; i < username.length; i++) {
-            hash = username.charCodeAt(i) + ((hash << 5) - hash);
+        for (let i = 0; i < safeUsername.length; i++) {
+            hash = safeUsername.charCodeAt(i) + ((hash << 5) - hash);
         }
         return colors[Math.abs(hash) % colors.length];
     }, [username]);

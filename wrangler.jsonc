@@ -40,7 +40,7 @@
         "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[(",
         "EMAIL_API_KEY": "", // 请在 resend.com 免费注册并填入 API Key
         "EMAIL_FROM": "onboarding@resend.dev", // Resend 默认的免费发件人（测试用）
-        "AI_BASE_URL": "https://emtf.aipm9527.online", // 外部 AI 提供商 Base URL
-        "AI_API_KEY": "sk-G4dqe3sPDmhkGqw09HUdaIBtBgteLbDLCUU8BwlwyLqiisDt" // 外部 AI 提供商 API Key (请填入)
+        "AI_BASE_URL": "https://cliproxy.1997121.xyz", // 外部 AI 提供商 Base URL
+        "AI_API_KEY": "WzIw4JJM9ZVx_HAKD1a2O4igBfz65T4x" // 外部 AI 提供商 API Key (请填入)
     }
 }

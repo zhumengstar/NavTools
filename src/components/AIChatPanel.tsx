@@ -139,7 +139,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
     const isDark = theme.palette.mode === 'dark';
     const inputRef = useRef<HTMLInputElement>(null);
     const [selectedModel, setSelectedModel] = useState(() => {
-        return localStorage.getItem(`chat_model_${username}`) || '@cf/zai-org/glm-4.7-flash';
+        return localStorage.getItem(`chat_model_${username}`) || 'gemini-3.1-pro-high';
     });
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
     const [fetchingModels, setFetchingModels] = useState(false);
@@ -194,7 +194,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
                 console.error('Failed to fetch AI models:', error);
                 // Fallback to defaults if fetch fails
                 setAvailableModels([
-                    { id: '@cf/zai-org/glm-4.7-flash', capabilities: { function_calling: false, vision: false } }
+                    { id: 'gemini-3.1-pro-high', capabilities: { function_calling: false, vision: false } }
                 ]);
             } finally {
                 setFetchingModels(false);
@@ -862,8 +862,10 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
                                             // 简单的上下文长度估算
                                             let contextInfo = '';
                                             const lower = model.id.toLowerCase();
-                                            if (lower.includes('gemini-1.5')) contextInfo = '1M+ Context';
-                                            else if (lower.includes('claude-3')) contextInfo = '200k Context';
+                                            if (lower.includes('gemini-3.1') || lower.includes('gemini-3-pro') || lower.includes('gemini-2.5')) contextInfo = '1M+ Context';
+                                            else if (lower.includes('gemini-1.5')) contextInfo = '1M+ Context';
+                                            else if (lower.includes('kimi') || lower.includes('moonshot')) contextInfo = '128k Context';
+                                            else if (lower.includes('claude-4') || lower.includes('claude-3')) contextInfo = '200k Context';
                                             else if (lower.includes('gpt-4') || lower.includes('gpt-4o')) contextInfo = '128k Context';
                                             else if (lower.includes('gpt-3.5')) contextInfo = '16k Context';
                                             else if (lower.includes('deepseek')) contextInfo = '32k Context';
