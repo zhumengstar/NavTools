@@ -8,19 +8,12 @@ services:
     volumes:
       - ./data:/app/data
       - ./seed:/app/seed
-    environment:
-      - NODE_ENV=production
-      - DB_TYPE=d1
-      - USE_REMOTE_DB=true
-      - AI_BASE_URL=https://cliproxy.1997121.xyz/v1
-      - AI_API_KEY=sk-cLhZ6wffGNE4CvvL0K3L0NfWkFsO4uQ5Mz6XoK7JaFlqJgIp09
-      - DEFAULT_MODEL=gemini-3.1-pro-high
-      - AUTH_USERNAME=admin
-      - ADMIN_PASSWORD=admin1
-      - CLOUDFLARE_DATABASE_ID=2539afd9-931b-444b-8bc7-2e0816242ba8
-      - CLOUDFLARE_D1_FILE=db/database.db
     env_file:
       - .env
+    environment:
+      # Override specific variables if needed (optional)
+      - NODE_ENV=production
+    restart: unless-stopped
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/api/health"]

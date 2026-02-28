@@ -40,6 +40,8 @@ NEXT.md
 
 # 本地环境文件
 .env.local
+.env*
+!.env.example
 .dev/
 node_modules/.tmp/
 
