@@ -15,8 +15,8 @@ RUN apk add --no-cache \
 # Copy package files
 COPY package.json ./
 
-# Generate pnpm-lock.yaml if not exists (using npm)
-RUN npm install -g pnpm && npm install && pnpm install
+# Generate pnpm-lock.yaml if not exists (corepack already provides pnpm)
+RUN npm install && pnpm install
 
 # Copy rest of files
 COPY . .
