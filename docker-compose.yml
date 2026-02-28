@@ -2,18 +2,35 @@ version: '3.8'
 
 services:
   navtools:
-    container_name: navtools
-    image: navtools
     build: .
     ports:
       - "8787:8787"
     volumes:
-      # Data persistence for SQLite (D1) and KV
-      - ./.wrangler:/app/.wrangler
+      - ./data:/app/data
+      - ./seed:/app/seed
     environment:
-      - WRANGLER_SEND_METRICS=false
-      # Set to "true" for the first time to initialize the database, then you can set it to "false"
-      - INIT_DB=true
-    tty: true
-    stdin_open: true
+      - NODE_ENV=production
+      - DB_TYPE=d1
+      - USE_REMOTE_DB=true
+      - AI_BASE_URL=https://cliproxy.1997121.xyz/v1
+      - AI_API_KEY=sk-cLhZ6wffGNE4CvvL0K3L0NfWkFsO4uQ5Mz6XoK7JaFlqJgIp09
+      - DEFAULT_MODEL=gemini-3.1-pro-high
+      - AUTH_USERNAME=admin
+      - ADMIN_PASSWORD=admin1
+      - CLOUDFLARE_DATABASE_ID=2539afd9-931b-444b-8bc7-2e0816242ba8
+      - CLOUDFLARE_D1_FILE=db/database.db
+    env_file:
+      - .env
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - navtools-network
+
+networks:
+  navtools-network:
+    driver: bridge

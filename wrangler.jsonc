@@ -36,7 +36,7 @@
     "vars": {
         "AUTH_ENABLED": "true",
         "AUTH_USERNAME": "admin",
-        "AUTH_PASSWORD": "$2a$10$QwZJF3Z1Rs729f7li9Wy3O9XkUvOSh9OBDY7EE4I9OrXKs1EUhG5O",
+        "AUTH_PASSWORD": "$2y$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG",
         "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[(",
         "EMAIL_API_KEY": "", // 请在 resend.com 免费注册并填入 API Key
         "EMAIL_FROM": "onboarding@resend.dev", // Resend 默认的免费发件人（测试用）

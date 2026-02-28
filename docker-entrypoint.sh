@@ -1,38 +1,53 @@
-#!/bin/sh
+#!/bin/bash
+
+# Exit on error
 set -e
 
-# 定义数据库文件存放路径 (Wrangler 本地开发模式默认路径)
-# 注意：在 Docker 中我们通常挂载 /app/.wrangler
-DB_PATH="/app/.wrangler/state/v3/d1"
+echo "Starting NavTools container..."
 
-# 检查是否需要强制清空并初始化
-if [ "$INIT_DB" = "true" ]; then
-    echo "INIT_DB=true is detected. Clearing existing data..."
-    rm -rf "$DB_PATH"
-fi
-
-# 检查数据库是否已经初始化
-# Wrangler 会在上述路径下创建数据库文件，如果目录为空或不存在则认为未初始化
-if [ ! -d "$DB_PATH" ] || [ -z "$(ls -A "$DB_PATH" 2>/dev/null)" ]; then
-    echo "Database not found or empty. Initializing database..."
+# Check if we should use remote database
+if [ "${USE_REMOTE_DB:-false}" = "true" ]; then
+    echo "Using remote Cloudflare D1 database"
     
-    # 确保目录存在
-    mkdir -p "$DB_PATH"
+    # Set production database environment variables
+    export NODE_ENV=production
+    export DB_TYPE=d1
+    export USE_REMOTE_DB=true
     
-    # 执行初始化 SQL
-    pnpm exec wrangler d1 execute DB --local --file=scripts/init_db.sql
-    
-    # 插入种子数据
-    if [ -f "scripts/seed_data.sql" ]; then
-        echo "Inserting seed data..."
-        pnpm exec wrangler d1 execute DB --local --file=scripts/seed_data.sql
-    fi
-    
-    echo "Database initialization completed."
+    # Initialize remote database (run migrations)
+    echo "Initializing remote database..."
+    cd /app && npm run db:migrate:remote || echo "Remote migration failed, continuing..."
 else
-    echo "Database already exists. Skipping initialization."
+    echo "Using local SQLite database"
+    
+    # Set local development environment variables
+    export NODE_ENV=development
+    export DB_TYPE=sqlite
+    export SQLITE_DB_PATH=/app/data/nav.db
+    
+    # Ensure data directory exists
+    mkdir -p /app/data
+    
+    # Copy seed data if database doesn't exist
+    if [ ! -f "/app/data/nav.db" ]; then
+        echo "Initializing local database..."
+        cp /app/seed/nav.db /app/data/nav.db
+    fi
 fi
 
-# 启动应用
-echo "Starting NavTools via Wrangler..."
-exec "$@"
+# Generate password hash if AUTH_PASSWORD is not set
+if [ -z "${AUTH_PASSWORD}" ] && [ -n "${ADMIN_PASSWORD}" ]; then
+    echo "Generating password hash for admin..."
+    cd /app && npm run hash-password -- "${ADMIN_PASSWORD}" > /tmp/password_hash.txt
+    export AUTH_PASSWORD=$(cat /tmp/password_hash.txt)
+    rm -f /tmp/password_hash.txt
+fi
+
+# Start the application
+if [ "${NODE_ENV}" = "production" ]; then
+    echo "Starting in production mode (Cloudflare Worker)..."
+    exec npm start
+else
+    echo "Starting in development mode (Vite dev server)..."
+    exec npm run dev
+fi
