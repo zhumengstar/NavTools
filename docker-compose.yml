@@ -3,6 +3,9 @@ version: '3.8'
 services:
   navtools:
     build: .
+    network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8787:8787"
     volumes:
@@ -21,9 +24,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    networks:
-      - navtools-network
-
-networks:
-  navtools-network:
-    driver: bridge

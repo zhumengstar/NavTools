@@ -1,6 +1,7 @@
 // src/api/http.ts
 // 不使用外部JWT库，改为内置的crypto API
-import { compareSync, hashSync } from 'bcrypt-edge';
+import bcrypt from 'bcryptjs';
+const { compareSync, hashSync } = bcrypt;
 
 // 定义D1数据库类型
 interface D1Database {

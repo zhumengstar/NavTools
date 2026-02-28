@@ -6,6 +6,7 @@
     "$schema": "node_modules/wrangler/config-schema.json",
     "name": "navtools",
     "main": "worker/index.ts",
+    "account_id": "0f7122ab026d40f60676d876f61c3c98",
     "compatibility_date": "2026-01-01",
     "compatibility_flags": [
         "nodejs_compat",
@@ -14,9 +15,6 @@
     "assets": {
         "directory": "dist/client",
         "not_found_handling": "single-page-application"
-    },
-    "observability": {
-        "enabled": false
     },
     // D1数据库绑定
     "d1_databases": [
