@@ -172,6 +172,7 @@ export interface UserListItem {
   role: string;
   avatar_url: string | null;
   created_at: string;
+  last_login_at: string | null;
   group_count: number;
   site_count: number;
 }
@@ -240,6 +241,11 @@ export class NavigationAPI {
     // 迁移：为 users 表添加 email 字段
     try {
       await this.db.exec('ALTER TABLE users ADD COLUMN email TEXT;');
+    } catch { }
+
+    // 迁移：为 users 表添加 last_login_at 字段
+    try {
+      await this.db.exec('ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP;');
     } catch { }
 
     // 迁移环境变量中的管理员到 users 表
@@ -446,6 +452,8 @@ export class NavigationAPI {
       if (user) {
         const isPasswordValid = compareSync(loginRequest.password, user.password_hash);
         if (isPasswordValid) {
+          // 更新最后登录时间
+          await this.db.prepare('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?').bind(user.id).run();
           const token = await this.generateToken(
             { id: user.id, username: user.username, role: user.role },
             loginRequest.rememberMe || false
@@ -506,16 +514,17 @@ export class NavigationAPI {
     // 采用最稳健的子查询方式，直接在 SQL 层面完成统计
     // 重点：不使用外部别名关联(如 s.user_id)，而是直接在内部 WHERE 匹配 u.id
     const query = `
-      SELECT 
-        u.id, 
-        u.username, 
-        u.email, 
-        u.role, 
-        u.avatar_url, 
+      SELECT
+        u.id,
+        u.username,
+        u.email,
+        u.role,
+        u.avatar_url,
         u.created_at,
+        u.last_login_at,
         (SELECT COUNT(*) FROM groups WHERE user_id = u.id AND (is_deleted = 0 OR is_deleted IS NULL)) as group_count,
-        (SELECT COUNT(*) FROM sites s 
-         JOIN groups g ON s.group_id = g.id 
+        (SELECT COUNT(*) FROM sites s
+         JOIN groups g ON s.group_id = g.id
          WHERE g.user_id = u.id AND (s.is_deleted = 0 OR s.is_deleted IS NULL)) as site_count
       FROM users u
       ORDER BY u.id ASC

@@ -90,6 +90,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                             <TableCell>ID</TableCell>
                             <TableCell>角色</TableCell>
                             <TableCell>统计</TableCell>
+                            <TableCell>最后登录</TableCell>
                             <TableCell>注册时间</TableCell>
                         </TableRow>
                     </TableHead>
@@ -140,13 +141,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                                     </Box>
                                 </TableCell>
                                 <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                                    {user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '从未登录'}
+                                </TableCell>
+                                <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
                                     {new Date(user.created_at).toLocaleString()}
                                 </TableCell>
                             </TableRow>
                         ))}
                         {users.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                                     暂无注册用户
                                 </TableCell>
                             </TableRow>
