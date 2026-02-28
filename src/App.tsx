@@ -1449,15 +1449,6 @@ function App() {
     }
   };
 
-  // 提交修改分组
-  // 启动跨分组拖动模式
-  const startCrossGroupDrag = useCallback(() => {
-    console.log('开始跨分组拖动');
-    setSortMode(SortMode.CrossGroupDrag);
-    setCurrentSortingGroupId(null);
-
-  }, []);
-
   // === 结束后台自动任务定义 ===
 
   // 处理跨分组拖拽的 DragOver 事件
@@ -2485,9 +2476,12 @@ function App() {
   };
 
   // 打开站点设置时刷新数据
-  const handleSiteSettingsOpen = (site: Site) => {
-    setSiteToSettings(site);
-    setIsSettingsOpen(true);
+  const handleSiteSettingsOpen = (siteId: number) => {
+    const site = groups.flatMap(g => g.sites).find(s => s.id === siteId);
+    if (site) {
+      setSiteToSettings(site);
+      setIsSettingsOpen(true);
+    }
   };
 
   // 批量更新精选状态
@@ -2822,7 +2816,6 @@ function App() {
                         onLogout={handleLogout}
                         onRestore={handleRestore}
                         onStartGroupSort={startGroupSort}
-                        onStartCrossGroupDrag={startCrossGroupDrag}
                         onOpenConfig={handleOpenConfig}
                         onExportData={handleExportData}
                         onOpenImport={handleOpenImport}

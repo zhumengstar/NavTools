@@ -52,7 +52,6 @@ interface UserAvatarProps {
     onChangePassword?: (oldPassword: string, newPassword: string) => Promise<boolean>;
     onRestore: (item: Site | Site[] | Group | Group[]) => void;
     onStartGroupSort: () => void;
-    onStartCrossGroupDrag: () => void;
     onOpenConfig: () => void;
     onExportData: () => void;
     onOpenImport: () => void;
@@ -72,7 +71,6 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
     onChangePassword,
     onRestore,
     onStartGroupSort,
-    onStartCrossGroupDrag,
     onOpenConfig,
     onExportData,
     onOpenImport,

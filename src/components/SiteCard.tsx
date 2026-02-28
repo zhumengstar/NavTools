@@ -15,7 +15,6 @@ import {
   Checkbox,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import RecommendIcon from '@mui/icons-material/Recommend';
 
 interface SiteCardProps {
@@ -29,7 +28,7 @@ interface SiteCardProps {
   isBatchMode?: boolean; // 新增：是否处于批量模式
   isSelected?: boolean; // 新增：是否被选中
   onToggleSelection?: (id: number) => void; // 新增：切换选中回调
-  onSettingsOpen?: (site: Site) => Promise<void> | void; // 新增：打开设置时的回调
+  onSettingsOpen?: (siteId: number) => Promise<void> | void; // 新增：打开设置时的回调
 }
 
 // 使用memo包装组件以减少不必要的重渲染
@@ -164,8 +163,8 @@ const SiteCard = memo(function SiteCard({
                 className="site-settings-btn"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (onSettingsOpen) {
-                    onSettingsOpen(site);
+                  if (onSettingsOpen && site.id) {
+                    onSettingsOpen(site.id);
                   }
                 }}
                 sx={{
