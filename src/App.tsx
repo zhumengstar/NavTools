@@ -3412,12 +3412,12 @@ function App() {
                 onClose={handleCloseAdminConfig}
                 maxWidth='lg' // Large box
                 fullWidth
-                sx={{ zIndex: 1400 }}
-                PaperProps={{
-                  sx: {
-                    m: { xs: 2, sm: 3, md: 4 },
-                    width: { xs: 'calc(100% - 32px)', sm: '90%', md: '80%', lg: '80%' },
-                  },
+                sx={{ 
+                    zIndex: 1300, // 降低层级，确保用户书签对话框在上方
+                    '& .MuiDialog-paper': {
+                        m: { xs: 2, sm: 3, md: 4 },
+                        width: { xs: 'calc(100% - 32px)', sm: '90%', md: '80%', lg: '80%' },
+                    }
                 }}
               >
                 <DialogTitle>
