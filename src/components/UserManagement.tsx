@@ -150,10 +150,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                                     />
                                 </TableCell>
                                 <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                                    {user.last_login_at ? new Date(user.last_login_at).toLocaleString() : '从未登录'}
+                                    {user.last_login_at ? new Date(user.last_login_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '从未登录'}
                                 </TableCell>
                                 <TableCell sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                                    {new Date(user.created_at).toLocaleString()}
+                                    {new Date(user.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
                                 </TableCell>
                             </TableRow>
                         ))}

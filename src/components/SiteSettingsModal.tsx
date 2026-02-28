@@ -556,7 +556,7 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
                     上次点击时间
                   </Typography>
                   <Typography variant='body2' fontWeight='medium'>
-                    {site.last_clicked_at ? new Date(site.last_clicked_at.replace(' ', 'T')).toLocaleString() : ''}
+                    {site.last_clicked_at ? new Date(site.last_clicked_at.replace(' ', 'T')).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : ''}
                   </Typography>
                 </Box>
               )}

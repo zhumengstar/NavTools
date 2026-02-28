@@ -725,7 +725,7 @@ const UserAvatar: React.FC<UserAvatarProps> = ({
                                 </ListItemIcon>
                                 <ListItemText
                                     primary='最后登录'
-                                    secondary={lastLoginAt ? new Date(lastLoginAt).toLocaleString() : '从未登录'}
+                                    secondary={lastLoginAt ? new Date(lastLoginAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '从未登录'}
                                     primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
                                 />
                             </ListItem>
