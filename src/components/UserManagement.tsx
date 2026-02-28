@@ -13,12 +13,10 @@ import {
     Chip,
     CircularProgress,
     Alert,
-    IconButton,
 } from '@mui/material';
 import { UserListItem } from '../API/http';
 import { NavigationClient, MockNavigationClient } from '../API/client';
 import UserBookmarksDialog from './UserBookmarksDialog';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 
 interface UserManagementProps {
     api: NavigationClient | MockNavigationClient;

@@ -15,7 +15,6 @@ import {
 } from '@mui/material';
 import { NavigationClient, MockNavigationClient } from '../API/client';
 import SiteCard from './SiteCard';
-import GroupCard from './GroupCard';
 
 interface UserBookmarksDialogProps {
     open: boolean;
@@ -121,10 +120,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                                 key={site.id}
                                                 site={site}
                                                 onSettingsOpen={() => {}}
-                                                onDelete={() => {}}
-                                                onUpdate={() => {}}
-                                                isOwner={false}
-                                                viewOnly={true}
+                                                viewMode='readonly'
                                             />
                                         ))}
                                     </Box>
