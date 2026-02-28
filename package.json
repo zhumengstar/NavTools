@@ -29,7 +29,7 @@
         "@mui/icons-material": "^7.0.1",
         "@mui/lab": "7.0.1-beta.22",
         "@mui/material": "^7.0.1",
-        "bcrypt-edge": "^2.1.1",
+        "bcrypt-edge": "^0.1.1",
         "better-sqlite3": "^11.8.1",
         "framer-motion": "^11.15.0",
         "markdown-it": "^14.1.0",

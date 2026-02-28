@@ -2,23 +2,23 @@
 FROM node:22-slim
 WORKDIR /app
 
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
-
 # Install basic tools and python3 for wrangler/better-sqlite3
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# Use npm instead of pnpm to avoid lockfile issues
+COPY package.json package-lock.json* ./
+# Use official npm registry for reliable package resolution
+RUN npm config set registry https://registry.npmjs.org/
+RUN npm install --no-package-lock || npm install
 
 COPY . .
 
-RUN pnpm run build
+RUN npm run build
 
 # Expose port
 EXPOSE 8787
@@ -35,4 +35,4 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Start worker
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["pnpm", "exec", "wrangler", "dev", "--config", "wrangler.jsonc", "--ip", "0.0.0.0", "--port", "8787"]
+CMD ["npx", "wrangler", "dev", "--config", "wrangler.jsonc", "--ip", "0.0.0.0", "--port", "8787"]
