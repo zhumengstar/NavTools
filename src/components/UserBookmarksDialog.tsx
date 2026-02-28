@@ -16,6 +16,14 @@ import {
 import { NavigationClient, MockNavigationClient } from '../API/client';
 import SiteCard from './SiteCard';
 
+// 确保对话框在最顶层显示
+const dialogStyles = {
+    paper: {
+        zIndex: 9999,
+        position: 'relative' as const,
+    }
+};
+
 interface UserBookmarksDialogProps {
     open: boolean;
     onClose: () => void;
@@ -64,7 +72,8 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
             PaperProps={{
                 sx: { 
                     minHeight: '60vh',
-                    maxHeight: '80vh'
+                    maxHeight: '80vh',
+                    zIndex: 9999
                 }
             }}
         >
