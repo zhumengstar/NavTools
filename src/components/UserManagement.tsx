@@ -13,9 +13,12 @@ import {
     Chip,
     CircularProgress,
     Alert,
+    IconButton,
 } from '@mui/material';
 import { UserListItem } from '../API/http';
 import { NavigationClient, MockNavigationClient } from '../API/client';
+import UserBookmarksDialog from './UserBookmarksDialog';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 interface UserManagementProps {
     api: NavigationClient | MockNavigationClient;
@@ -25,6 +28,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
     const [users, setUsers] = useState<UserListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [bookmarkDialogOpen, setBookmarkDialogOpen] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+    const [selectedUsername, setSelectedUsername] = useState<string>('');
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -47,6 +53,18 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
 
         fetchUsers();
     }, [api]);
+
+    const handleViewBookmarks = (user: UserListItem) => {
+        setSelectedUserId(user.id);
+        setSelectedUsername(user.username);
+        setBookmarkDialogOpen(true);
+    };
+
+    const handleCloseBookmarkDialog = () => {
+        setBookmarkDialogOpen(false);
+        setSelectedUserId(null);
+        setSelectedUsername('');
+    };
 
     if (loading) {
         return (
@@ -102,24 +120,25 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                                 sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'action.hover' } }}
                             >
                                 <TableCell component="th" scope="row">
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <Avatar
-                                            src={user.avatar_url || ''}
-                                            alt={user.username}
-                                            sx={{ width: 40, height: 40 }}
-                                        >
-                                            {user.username.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                        <Box>
-                                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                                                {user.username}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {user.email || '未绑定邮箱'}
-                                            </Typography>
-                                        </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Avatar
+                                        src={user.avatar_url || ''}
+                                        alt={user.username}
+                                        sx={{ width: 40, height: 40, cursor: 'pointer' }}
+                                        onClick={() => handleViewBookmarks(user)}
+                                    >
+                                        {user.username.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Box sx={{ flexGrow: 1 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                                            {user.username}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {user.email || '未绑定邮箱'}
+                                        </Typography>
                                     </Box>
-                                </TableCell>
+                                </Box>
+                            </TableCell>
                                 <TableCell>
                                     <Chip label={user.id} size="small" variant="outlined" />
                                 </TableCell>
@@ -167,7 +186,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                     </TableBody>
                 </Table>
             </TableContainer>
-        </Box>
+        
+        {/* 用户书签对话框 */}
+        <UserBookmarksDialog
+            open={bookmarkDialogOpen}
+            onClose={handleCloseBookmarkDialog}
+            userId={selectedUserId}
+            username={selectedUsername}
+            api={api}
+        />
+      </Box>
     );
 };
 
