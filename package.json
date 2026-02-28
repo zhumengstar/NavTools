@@ -38,6 +38,8 @@
         "react-markdown": "^9.0.1"
     },
     "devDependencies": {
+        "@cloudflare/vite-plugin": "^0.7.0",
+        "remark-gfm": "^3.0.1",
         "@types/bcrypt": "^5.0.2",
         "@types/better-sqlite3": "^7.6.12",
         "@types/react": "^19.0.2",
