@@ -13,7 +13,7 @@
         "no_handle_cross_request_promise_resolution"
     ], // 必须启用 Node.js 兼容
     "assets": {
-        "directory": "dist/client",
+        "directory": "dist",
         "not_found_handling": "single-page-application"
     },
     // D1数据库绑定
