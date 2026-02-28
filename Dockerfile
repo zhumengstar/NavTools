@@ -36,8 +36,5 @@ RUN apk add --no-cache wget
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8787/ || exit 1
 
-# Entrypoint
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["npx", "wrangler", "dev", "--config", "wrangler.jsonc", "--ip", "0.0.0.0", "--port", "8787"]
+# Entrypoint - 使用 wrangler dev --remote 连接远程 Cloudflare
+CMD ["npx", "wrangler", "dev", "--remote", "--ip", "0.0.0.0", "--port", "8787"]
