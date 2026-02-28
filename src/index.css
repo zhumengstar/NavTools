@@ -1,6 +1,6 @@
-@import 'tailwindcss';
-
-@custom-variant dark (&:where(.dark, .dark *));
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
     --glass-bg: rgba(255, 255, 255, 0.7);

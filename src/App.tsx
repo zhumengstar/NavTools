@@ -1662,7 +1662,7 @@ function App() {
       if (!currentGroupId) {
         for (let i = 0; i < groups.length; i++) {
           const group = groups[i];
-          if (group.sites.some(s => s.id === activeSiteId)) {
+          if (group && group.sites && group.sites.some(s => s.id === activeSiteId)) {
             currentGroupId = group.id;
             groupIndex = i;
             break;
