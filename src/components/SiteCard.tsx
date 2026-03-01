@@ -116,7 +116,8 @@ const SiteCard = memo(function SiteCard({
       onToggleSelection(site.id);
       return;
     }
-    if (!isEditMode && site.url) {
+    // 编辑模式和非编辑模式下都可以点击跳转
+    if (site.url) {
       // 记录点击行为，不阻塞跳转
       if (site.id && onSiteClick) {
         onSiteClick(site.id);
@@ -389,7 +390,7 @@ const SiteCard = memo(function SiteCard({
                   }}
                 />
               )}
-              <CardActionArea onClick={handleCardClick} sx={{ height: '100%' }}
+              <CardActionArea onClick={handleCardClick} sx={{ height: '100%' }}>
                 <CardContent
                   sx={{
                     position: 'relative',
