@@ -14,9 +14,14 @@ import {
     Chip,
     Switch,
     FormControlLabel,
+    IconButton,
+    Tooltip,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import { NavigationClient, MockNavigationClient } from '../API/client';
+import { Group } from '../API/http';
 import SiteCard from './SiteCard';
+import EditGroupDialog from './EditGroupDialog';
 
 interface UserBookmarksDialogProps {
     open: boolean;
@@ -32,6 +37,8 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
     const [groups, setGroups] = useState<any[]>([]);
     const [visibleSiteCounts, setVisibleSiteCounts] = useState<Record<number, number>>({});
     const [includeDeleted, setIncludeDeleted] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [editingGroup, setEditingGroup] = useState<Group | null>(null);
 
     useEffect(() => {
         if (open && userId) {
@@ -70,6 +77,37 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
             ...prev,
             [groupId]: (prev[groupId] || 40) + 40, // 初始显示40个，每次增加40个
         }));
+    };
+
+    const handleEditClick = (group: Group) => {
+        setEditingGroup(group);
+        setEditDialogOpen(true);
+    };
+
+    const handleUpdateGroup = async (updatedGroup: Group) => {
+        try {
+            const result = await api.updateGroup(updatedGroup.id as number, updatedGroup);
+            if (result) {
+                setGroups(prev => prev.map(g => g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g));
+            }
+            setEditDialogOpen(false);
+            setEditingGroup(null);
+        } catch (err) {
+            console.error('Update group error:', err);
+        }
+    };
+
+    const handleDeleteGroup = async (groupId: number) => {
+        try {
+            const success = await api.deleteGroup(groupId);
+            if (success) {
+                setGroups(prev => prev.filter(g => g.id !== groupId));
+            }
+            setEditDialogOpen(false);
+            setEditingGroup(null);
+        } catch (err) {
+            console.error('Delete group error:', err);
+        }
     };
 
     return (
@@ -158,6 +196,15 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                             size="small"
                                             variant="outlined"
                                         />
+                                        <Tooltip title="编辑分组">
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => handleEditClick(group)}
+                                                sx={{ ml: 1 }}
+                                            >
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
                                     </Box>
                                     
                                     {(() => {
@@ -224,6 +271,19 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                     关闭
                 </Button>
             </DialogActions>
+
+            {editingGroup && (
+                <EditGroupDialog
+                    open={editDialogOpen}
+                    group={editingGroup}
+                    onClose={() => {
+                        setEditDialogOpen(false);
+                        setEditingGroup(null);
+                    }}
+                    onSave={handleUpdateGroup}
+                    onDelete={handleDeleteGroup}
+                />
+            )}
         </Dialog>
     );
 };
