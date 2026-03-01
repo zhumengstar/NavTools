@@ -674,7 +674,7 @@ export class MockNavigationClient extends NavigationClient {
 
   async getAdminUsers(): Promise<UserListItem[]> {
     return [
-      { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', avatar_url: null, created_at: new Date().toISOString(), last_login_at: new Date().toISOString(), login_count: 42, group_count: mockGroups.length, site_count: mockSites.length }
+      { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', avatar_url: null, created_at: new Date().toISOString(), last_login_at: new Date().toISOString(), login_count: 42, group_count: mockGroups.length, site_count: mockSites.length, ai_usage_count: 0 }
     ];
   }
 
