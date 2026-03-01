@@ -536,7 +536,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
           }}
           onClick={(e) => e.stopPropagation()} // 阻止按钮区域点击触发折叠
         >
-          {isCurrentEditingGroup ? (
+          {sortMode === 'SiteSort' && currentSortingGroupId === group.id ? (
             <Typography
               variant='body2'
               color='primary'
