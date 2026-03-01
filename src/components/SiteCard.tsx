@@ -361,7 +361,7 @@ const SiteCard = memo(function SiteCard({
                 {site.description || '暂无描述'}
               </Typography>
             </Tooltip>
-          </Box>
+          </CardActionArea>
         ) : (
           <>
             <Box sx={{ height: '100%', position: 'relative' }}>
@@ -389,7 +389,7 @@ const SiteCard = memo(function SiteCard({
                   }}
                 />
               )}
-              <CardActionArea onClick={handleCardClick} sx={{ height: '100%' }}>
+              <CardActionArea onClick={handleCardClick} sx={{ height: '100%' }}
                 <CardContent
                   sx={{
                     position: 'relative',
