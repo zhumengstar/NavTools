@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Site, Group } from '../API/http';
 import SiteCard from './SiteCard';
 import { GroupWithSites } from '../types';

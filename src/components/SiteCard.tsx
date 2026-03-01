@@ -178,14 +178,41 @@ const SiteCard = memo(function SiteCard({
       >
         {isEditMode ? (
           <Box
+            onClick={isBatchMode ? handleCardClick : undefined}
             sx={{
               height: '100%',
               p: { xs: 1.5, sm: 2 },
-              cursor: 'grab',
+              pt: { xs: 2.5, sm: 3 }, // 为复选框留出顶部空间
+              cursor: isBatchMode ? 'pointer' : 'grab',
               display: 'flex',
               flexDirection: 'column',
+              position: 'relative',
             }}
           >
+            {/* 批量操作复选框 - 编辑模式 */}
+            {isBatchMode && (
+              <Checkbox
+                checked={isSelected}
+                size="small"
+                color="primary"
+                onChange={() => onToggleSelection?.(site.id as number)}
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  zIndex: 10,
+                  p: 0.5,
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
+                  borderRadius: '3px',
+                  '&:hover': {
+                    backgroundColor: (theme) =>
+                      theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,1)',
+                  },
+                }}
+              />
+            )}
             <Box position='absolute' top={8} right={8} display='flex' gap={1}>
               <IconButton
                 size='small'
@@ -329,55 +356,43 @@ const SiteCard = memo(function SiteCard({
           </Box>
         ) : (
           <>
-            <CardActionArea onClick={handleCardClick} sx={{ height: '100%' }}>
-              <CardContent
-                sx={{
-                  position: 'relative',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  p: { xs: 1.5, sm: 2 },
-                  '&:last-child': { pb: { xs: 1.5, sm: 2 } },
-                }}
-              >
-                {/* 批量操作复选框 */}
-                {isBatchMode && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: 4,
-                      left: 4,
-                      zIndex: 3, // 确保在最上层
-                    }}
-                  >
-                    <Checkbox
-                      checked={isSelected}
-                      size="small"
-                      color="primary"
-                      onChange={() => onToggleSelection?.(site.id as number)}
-                      onClick={(e) => e.stopPropagation()} // 阻止冒泡到 CardActionArea
-                      sx={{
-                        p: 0.5,
-                        '&.Mui-checked': {
-                          color: 'primary.main',
-                        },
-                        backgroundColor: (theme) =>
-                          theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)',
-                        borderRadius: '4px',
-                        boxShadow: 1,
-                        '&:hover': {
-                          backgroundColor: (theme) =>
-                            theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                        },
-                        '&.Mui-checked': {
-                          '& .MuiSvgIcon-root': {
-                            fontSize: '1.2rem',
-                          },
-                        },
-                      }}
-                    />
-                  </Box>
-                )}
+            <Box sx={{ height: '100%', position: 'relative' }}>
+              {/* 批量操作复选框 */}
+              {isBatchMode && (
+                <Checkbox
+                  checked={isSelected}
+                  size="small"
+                  color="primary"
+                  onChange={() => onToggleSelection?.(site.id as number)}
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    left: 8,
+                    zIndex: 10,
+                    p: 0.5,
+                    backgroundColor: (theme) =>
+                      theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
+                    borderRadius: '3px',
+                    '&:hover': {
+                      backgroundColor: (theme) =>
+                        theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,1)',
+                    },
+                  }}
+                />
+              )}
+              <CardActionArea onClick={handleCardClick} sx={{ height: '100%' }}>
+                <CardContent
+                  sx={{
+                    position: 'relative',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    p: { xs: 1.5, sm: 2 },
+                    pt: { xs: 2.5, sm: 3 }, // 为复选框留出顶部空间
+                    '&:last-child': { pb: { xs: 1.5, sm: 2 } },
+                  }}
+                >
 
                 {/* 图标和名称 */}
                 <Box display='flex' alignItems='center' mb={1}>
@@ -498,6 +513,7 @@ const SiteCard = memo(function SiteCard({
                 </Tooltip>
               </CardContent>
             </CardActionArea>
+            </Box>
 
             {/* 设置按钮 - 只在编辑模式显示 (移出 CardActionArea 以修复 DOM 嵌套错误) */}
             {viewMode === 'edit' && (
