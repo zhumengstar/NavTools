@@ -68,7 +68,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
     const handleShowMore = (groupId: number) => {
         setVisibleSiteCounts(prev => ({
             ...prev,
-            [groupId]: (prev[groupId] || 5) + 10, // 每次增加10个站点
+            [groupId]: (prev[groupId] || 40) + 40, // 初始显示40个，每次增加40个
         }));
     };
 
@@ -161,7 +161,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                     </Box>
                                     
                                     {(() => {
-                                        const visibleCount = visibleSiteCounts[group.id] || 5;
+                                        const visibleCount = visibleSiteCounts[group.id] || 40;
                                         const sitesToShow = group.sites?.slice(0, visibleCount) || [];
                                         const totalSites = group.sites?.length || 0;
                                         const hasMore = totalSites > visibleCount;
