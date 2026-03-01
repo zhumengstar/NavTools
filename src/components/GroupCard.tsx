@@ -388,6 +388,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
         alignItems={{ xs: 'flex-start', sm: 'center' }}
         mb={2.5}
         gap={1}
+        onClick={handleToggleCollapse}
         sx={{
           position: 'sticky',
           top: 0,
@@ -402,6 +403,12 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
           borderTopRightRadius: 16,
           borderBottom: '1px solid',
           borderColor: 'divider',
+          cursor: 'pointer',
+          '&:hover': {
+            '& .collapse-icon': {
+              color: 'primary.main',
+            },
+          },
         }}
       >
         <Box
@@ -409,14 +416,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
             display: 'flex',
             alignItems: 'center',
             gap: 1,
-            cursor: 'pointer',
-            '&:hover': {
-              '& .collapse-icon': {
-                color: 'primary.main',
-              },
-            },
           }}
-          onClick={handleToggleCollapse}
         >
           <IconButton
             size='small'
@@ -424,6 +424,10 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
             sx={{
               transform: isCollapsed ? 'rotate(0deg)' : 'rotate(180deg)',
               transition: 'transform 0.3s ease-in-out',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleCollapse();
             }}
           >
             <ExpandMoreIcon />
@@ -451,6 +455,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
             flexWrap: 'wrap',
             justifyContent: { xs: 'flex-start', sm: 'flex-end' },
           }}
+          onClick={(e) => e.stopPropagation()} // 阻止按钮区域点击触发折叠
         >
           {isCurrentEditingGroup ? (
             <Typography
