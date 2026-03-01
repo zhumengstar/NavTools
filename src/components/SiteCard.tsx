@@ -243,7 +243,7 @@ const SiteCard = memo(function SiteCard({
                   }
                 }}
               >
-                <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em' }}>
                   <Typography
                     variant='subtitle2'
                     fontWeight='medium'
@@ -424,7 +424,7 @@ const SiteCard = memo(function SiteCard({
                       }
                     }}
                   >
-                    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em' }}>
                       <Typography
                         variant='subtitle2'
                         fontWeight='medium'

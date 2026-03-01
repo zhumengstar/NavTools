@@ -277,7 +277,7 @@ const VisitorHome: React.FC<VisitorHomeProps> = ({ api, onLoginClick }) => {
                                                         <LanguageIcon />
                                                     </Avatar>
                                                 )}
-                                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                                <Box sx={{ minWidth: 0, flex: 1, height: '3.2em', overflow: 'hidden' }}>
                                                     <Typography variant="subtitle1" fontWeight="bold" noWrap>
                                                         {item.site.name}
                                                     </Typography>

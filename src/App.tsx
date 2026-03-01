@@ -471,6 +471,7 @@ function App() {
   // 新增状态管理
   const [openAddGroup, setOpenAddGroup] = useState(false);
   const [openAddSite, setOpenAddSite] = useState(false);
+  const [creatingSite, setCreatingSite] = useState(false); // 防止重复点击创建
   // newGroup state moved to AddGroupDialog
   const [newSite, setNewSite] = useState<Partial<Site>>({
     name: '',
@@ -1723,6 +1724,10 @@ function App() {
   };
 
   const handleCloseAddSite = () => {
+    if (creatingSite) {
+      // 创建过程中可以取消，但需要重置状态
+      setCreatingSite(false);
+    }
     setOpenAddSite(false);
   };
 
@@ -1774,6 +1779,8 @@ function App() {
   };
 
   const handleCreateSite = async () => {
+    if (creatingSite) return; // 防止重复点击
+    setCreatingSite(true);
     try {
       if (!newSite.url) {
         handleError('站点URL不能为空');
@@ -1817,6 +1824,8 @@ function App() {
     } catch (error) {
       console.error('创建站点失败:', error);
       handleError('创建站点失败: ' + (error as Error).message);
+    } finally {
+      setCreatingSite(false);
     }
   };
 
@@ -3051,6 +3060,7 @@ function App() {
                       right: 8,
                       top: 8,
                     }}
+                    disabled={creatingSite}
                   >
                     <CloseIcon />
                   </IconButton>
@@ -3077,6 +3087,7 @@ function App() {
                           variant='outlined'
                           value={newSite.name}
                           onChange={handleSiteInputChange}
+                          disabled={creatingSite}
                         />
                       </Box>
                       <Box sx={{ flex: 1 }}>
@@ -3091,6 +3102,7 @@ function App() {
                           value={newSite.url}
                           onChange={handleSiteInputChange}
                           onBlur={(e) => handleUrlBlur(e.target.value)}
+                          disabled={creatingSite}
                         />
                       </Box>
                     </Box>
@@ -3104,6 +3116,7 @@ function App() {
                       variant='outlined'
                       value={newSite.icon}
                       onChange={handleSiteInputChange}
+                      disabled={creatingSite}
                       InputProps={{
                         endAdornment: (
                           <InputAdornment position='end'>
@@ -3129,6 +3142,7 @@ function App() {
                               }}
                               edge='end'
                               title='自动获取图标'
+                              disabled={creatingSite}
                             >
                               <AutoFixHighIcon />
                             </IconButton>
@@ -3146,6 +3160,7 @@ function App() {
                       variant='outlined'
                       value={newSite.description}
                       onChange={handleSiteInputChange}
+                      disabled={creatingSite}
                     />
                     <TextField
                       margin='dense'
@@ -3159,6 +3174,7 @@ function App() {
                       variant='outlined'
                       value={newSite.notes}
                       onChange={handleSiteInputChange}
+                      disabled={creatingSite}
                     />
 
                     {/* 公开/私密开关 */}
@@ -3170,6 +3186,7 @@ function App() {
                             setNewSite({ ...newSite, is_public: e.target.checked ? 1 : 0 })
                           }
                           color='primary'
+                          disabled={creatingSite}
                         />
                       }
                       label={
@@ -3188,11 +3205,17 @@ function App() {
                   </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3 }}>
-                  <Button onClick={handleCloseAddSite} variant='outlined'>
+                  <Button onClick={handleCloseAddSite} variant='outlined' disabled={creatingSite}>
                     取消
                   </Button>
-                  <Button onClick={handleCreateSite} variant='contained' color='primary'>
-                    创建
+                  <Button 
+                    onClick={handleCreateSite} 
+                    variant='contained' 
+                    color='primary'
+                    disabled={creatingSite}
+                    startIcon={creatingSite ? <CircularProgress size={20} color="inherit" /> : null}
+                  >
+                    {creatingSite ? '创建中...' : '创建'}
                   </Button>
                 </DialogActions>
               </Dialog>
