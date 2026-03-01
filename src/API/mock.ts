@@ -252,7 +252,7 @@ export class MockNavigationClient extends NavigationClient {
   }
 
   // 获取所有分组及其站点 (使用 JOIN 优化,避免 N+1 查询)
-  async getGroupsWithSites(userId?: number): Promise<GroupWithSites[]> {
+  async getGroupsWithSites(userId?: number, options?: { includeDeleted?: boolean }): Promise<GroupWithSites[]> {
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     let groups = [...mockGroups];
@@ -273,9 +273,12 @@ export class MockNavigationClient extends NavigationClient {
       groups = groups.filter(group => group.user_id === userId);
     }
 
-    // Filter deleted groups and sites
-    groups = groups.filter(g => !g.is_deleted);
-    sites = sites.filter(s => !s.is_deleted);
+    // 根据 includeDeleted 选项过滤已删除的分组和站点
+    const includeDeleted = options?.includeDeleted ?? false;
+    if (!includeDeleted) {
+      groups = groups.filter(g => !g.is_deleted);
+      sites = sites.filter(s => !s.is_deleted);
+    }
 
     // 组合分组和站点
     return groups.map((group) => ({

@@ -739,6 +739,13 @@ export default {
                             message: `[DEBUG] groups-with-sites request URL: ${request.url}`,
                         });
                         const userIdParam = url.searchParams.get('userId');
+                        const includeDeletedParam = url.searchParams.get('includeDeleted');
+                        
+                        // 解析 includeDeleted 参数
+                        let includeDeleted = false;
+                        if (includeDeletedParam === 'true') {
+                            includeDeleted = true;
+                        }
                         
                         // 验证 userId 参数
                         let targetUserId: number | undefined = undefined;
@@ -758,8 +765,10 @@ export default {
 
                         // 如果未认证且未提供userId参数，则视为访客，只能查看公开内容
                         if (!isAuthenticated && !userIdParam) {
+                            // 访客模式下强制不显示已删除内容
+                            includeDeleted = false;
                             // 获取所有分组及其站点（不按用户过滤）
-                            const allGroupsWithSites = await api.getGroupsWithSites();
+                            const allGroupsWithSites = await api.getGroupsWithSites(undefined, { includeDeleted });
                             // 过滤出公开分组下的公开站点
                             const filteredGroups = allGroupsWithSites
                                 .filter(group => group.is_public === 1)
@@ -783,7 +792,7 @@ export default {
                         log({
                             timestamp: new Date().toISOString(),
                             level: 'info',
-                            message: `[DEBUG] groups-with-sites: userIdParam=${userIdParam}, targetUserId=${targetUserId}, currentUserId=${currentUserId}, isAuthenticated=${isAuthenticated}`,
+                            message: `[DEBUG] groups-with-sites: userIdParam=${userIdParam}, targetUserId=${targetUserId}, currentUserId=${currentUserId}, isAuthenticated=${isAuthenticated}, includeDeleted=${includeDeleted}`,
                         });
                         // 确保 targetUserId 有效
                         if (targetUserId === undefined) {
@@ -793,7 +802,23 @@ export default {
                                 { status: 400 }
                             );
                         }
-                        const groupsWithSites = await api.getGroupsWithSites(targetUserId);
+                        const groupsWithSites = await api.getGroupsWithSites(targetUserId, { includeDeleted });
+                        
+                        // 调试日志：记录返回的分组数据
+                        log({
+                            timestamp: new Date().toISOString(),
+                            level: 'info',
+                            message: `[DEBUG] groups-with-sites result: count=${groupsWithSites.length}, targetUserId=${targetUserId}, includeDeleted=${includeDeleted}`,
+                        });
+                        if (groupsWithSites.length > 0) {
+                            // 记录前3个分组的 user_id
+                            const sample = groupsWithSites.slice(0, 3).map(g => ({ id: g.id, user_id: g.user_id, name: g.name, siteCount: g.sites?.length }));
+                            log({
+                                timestamp: new Date().toISOString(),
+                                level: 'info',
+                                message: `[DEBUG] groups-with-sites sample: ${JSON.stringify(sample)}`,
+                            });
+                        }
 
                         // 根据认证状态过滤数据（已认证用户可以看到所有数据，因为targetUserId已指定）
                         // 注意：这里假设已认证用户有权限查看targetUserId的数据

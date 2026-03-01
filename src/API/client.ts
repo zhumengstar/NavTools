@@ -244,8 +244,15 @@ export class NavigationClient {
   }
 
   // 获取所有分组及其站点 (使用 JOIN 优化,避免 N+1 查询)
-  async getGroupsWithSites(userId?: number): Promise<GroupWithSites[]> {
-    const endpoint = userId !== undefined ? `groups-with-sites?userId=${userId}` : 'groups-with-sites';
+  async getGroupsWithSites(userId?: number, options?: { includeDeleted?: boolean }): Promise<GroupWithSites[]> {
+    const params = new URLSearchParams();
+    if (userId !== undefined) {
+      params.set('userId', userId.toString());
+    }
+    if (options?.includeDeleted) {
+      params.set('includeDeleted', 'true');
+    }
+    const endpoint = params.toString() ? `groups-with-sites?${params.toString()}` : 'groups-with-sites';
     return this.request(endpoint);
   }
 
@@ -659,7 +666,7 @@ export class MockNavigationClient {
   async getUserProfile() { return { username: 'MockUser', email: 'mock@example.com', role: 'user', avatar_url: null }; }
   async updateUserProfile() { return { success: true }; }
   async getGroups() { return []; }
-  async getGroupsWithSites() { return []; }
+  async getGroupsWithSites(_userId?: number, _options?: { includeDeleted?: boolean }) { return []; }
   async getGroup() { return { id: 1, name: 'Mock' } as any; }
   async createGroup() { return { id: Date.now() } as any; }
   async updateGroup() { return { id: 1 } as any; }

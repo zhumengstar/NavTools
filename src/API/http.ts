@@ -1160,8 +1160,29 @@ export class NavigationAPI {
    * 返回格式: GroupWithSites[] (每个分组包含其站点数组)
    */
   // 获取所有分组及其站点 (使用 JOIN 优化,避免 N+1 查询)
-  async getGroupsWithSites(userId?: number): Promise<GroupWithSites[]> {
+  async getGroupsWithSites(userId?: number, options?: { includeDeleted?: boolean }): Promise<GroupWithSites[]> {
     // 使用 LEFT JOIN 一次性获取所有数据
+    const includeDeleted = options?.includeDeleted ?? false;
+    console.log('[NavigationAPI] getGroupsWithSites called with userId:', userId, 'includeDeleted:', includeDeleted);
+    
+    // 构建 JOIN 条件
+    const siteJoinCondition = includeDeleted 
+      ? 'g.id = s.group_id' 
+      : 'g.id = s.group_id AND (s.is_deleted = 0 OR s.is_deleted IS NULL)';
+    
+    // 构建 WHERE 条件
+    let whereClause = '';
+    if (!includeDeleted) {
+      whereClause = '(g.is_deleted = 0 OR g.is_deleted IS NULL)';
+    }
+    if (userId !== undefined) {
+      whereClause += (whereClause ? ' AND ' : '') + 'g.user_id = ?';
+    }
+    // 如果没有 WHERE 条件，添加一个永真条件
+    if (!whereClause) {
+      whereClause = '1=1';
+    }
+    
     const query = `
       SELECT
         g.id as group_id,
@@ -1169,6 +1190,9 @@ export class NavigationAPI {
         g.order_num as group_order,
         g.is_public as group_is_public,
         g.is_protected as group_is_protected,
+        g.user_id as group_user_id,
+        g.is_deleted as group_is_deleted,
+        g.deleted_at as group_deleted_at,
         g.created_at as group_created_at,
         g.updated_at as group_updated_at,
         s.id as site_id,
@@ -1179,13 +1203,15 @@ export class NavigationAPI {
         s.notes as site_notes,
         s.order_num as site_order,
         s.is_public as site_is_public,
+        s.is_deleted as site_is_deleted,
+        s.deleted_at as site_deleted_at,
         s.last_clicked_at as site_last_clicked_at,
         s.created_at as site_created_at,
         s.updated_at as site_updated_at,
         s.is_featured as site_is_featured
       FROM groups g
-      LEFT JOIN sites s ON g.id = s.group_id AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-      WHERE (g.is_deleted = 0 OR g.is_deleted IS NULL) ${userId !== undefined ? 'AND g.user_id = ?' : ''}
+      LEFT JOIN sites s ON ${siteJoinCondition}
+      WHERE ${whereClause}
       ORDER BY g.order_num ASC, s.order_num ASC
     `;
 
@@ -1195,6 +1221,9 @@ export class NavigationAPI {
       group_order: number;
       group_is_public?: number;
       group_is_protected: number;
+      group_user_id: number;
+      group_is_deleted?: number;
+      group_deleted_at?: string;
       group_created_at: string;
       group_updated_at: string;
       site_id: number | null;
@@ -1205,6 +1234,8 @@ export class NavigationAPI {
       site_notes: string | null;
       site_order: number | null;
       site_is_public?: number;
+      site_is_deleted?: number;
+      site_deleted_at?: string;
       site_is_featured?: number;
       site_last_clicked_at: string | null;
       site_created_at: string | null;
@@ -1223,6 +1254,9 @@ export class NavigationAPI {
           order_num: row.group_order,
           is_public: row.group_is_public,
           is_protected: row.group_is_protected,
+          user_id: row.group_user_id,
+          is_deleted: row.group_is_deleted,
+          deleted_at: row.group_deleted_at,
           created_at: row.group_created_at,
           updated_at: row.group_updated_at,
           sites: [],
@@ -1243,6 +1277,8 @@ export class NavigationAPI {
           is_featured: row.site_is_featured || 0,
           order_num: row.site_order!,
           is_public: row.site_is_public,
+          is_deleted: row.site_is_deleted,
+          deleted_at: row.site_deleted_at,
           last_clicked_at: row.site_last_clicked_at || undefined,
           created_at: row.site_created_at!,
           updated_at: row.site_updated_at!,

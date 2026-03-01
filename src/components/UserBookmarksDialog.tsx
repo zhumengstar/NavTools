@@ -12,6 +12,8 @@ import {
     Card,
     CardContent,
     Chip,
+    Switch,
+    FormControlLabel,
 } from '@mui/material';
 import { NavigationClient, MockNavigationClient } from '../API/client';
 import SiteCard from './SiteCard';
@@ -29,6 +31,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
     const [error, setError] = useState<string | null>(null);
     const [groups, setGroups] = useState<any[]>([]);
     const [visibleSiteCounts, setVisibleSiteCounts] = useState<Record<number, number>>({});
+    const [includeDeleted, setIncludeDeleted] = useState(false);
 
     useEffect(() => {
         if (open && userId) {
@@ -36,8 +39,14 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                 try {
                     setLoading(true);
                     setError(null);
-                    const data = await api.getGroupsWithSites(userId);
+                    const data = await api.getGroupsWithSites(userId, { includeDeleted });
+                    console.log('[UserBookmarksDialog] Fetched data for userId:', userId, 'includeDeleted:', includeDeleted, 'data:', data);
+                    if (data && data.length > 0) {
+                        console.log('[UserBookmarksDialog] Sample group user_ids:', data.map(g => ({ id: g.id, user_id: g.user_id, name: g.name, siteCount: g.sites?.length })));
+                    }
                     setGroups(data || []);
+                    // 重置可见站点计数，因为数据可能已改变
+                    setVisibleSiteCounts({});
                 } catch (err) {
                     console.error('Fetch user bookmarks error:', err);
                     setError(err instanceof Error ? err.message : '获取用户书签失败');
@@ -48,7 +57,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
 
             fetchUserBookmarks();
         }
-    }, [open, userId, api]);
+    }, [open, userId, api, includeDeleted]);
 
     const handleClose = () => {
         setGroups([]);
@@ -84,6 +93,18 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                 <Typography variant="body2" color="text.secondary">
                     用户ID: {userId}
                 </Typography>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={includeDeleted}
+                            onChange={(e) => setIncludeDeleted(e.target.checked)}
+                            size="small"
+                            color="primary"
+                        />
+                    }
+                    label="显示已删除的书签"
+                    sx={{ mt: 1 }}
+                />
             </DialogTitle>
             
             <DialogContent sx={{ px: 2, py: 1 }}>
@@ -113,9 +134,25 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                             <Card key={group.id} variant="outlined">
                                 <CardContent sx={{ pb: 1 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                                        <Typography variant="h6" sx={{ fontWeight: 'bold', flexGrow: 1 }}>
+                                        <Typography 
+                                            variant="h6" 
+                                            sx={{ 
+                                                fontWeight: 'bold', 
+                                                flexGrow: 1,
+                                                opacity: group.is_deleted ? 0.7 : 1,
+                                                textDecoration: group.is_deleted ? 'line-through' : 'none'
+                                            }}
+                                        >
                                             {group.name}
                                         </Typography>
+                                        {group.is_deleted && (
+                                            <Chip 
+                                                label="已删除"
+                                                size="small"
+                                                color="error"
+                                                variant="outlined"
+                                            />
+                                        )}
                                         <Chip 
                                             label={`${group.sites?.length || 0} 个书签`}
                                             size="small"
@@ -132,12 +169,32 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                             <>
                                                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
                                                     {sitesToShow.map((site: any) => (
-                                                        <SiteCard
+                                                        <Box 
                                                             key={site.id}
-                                                            site={site}
-                                                            onSettingsOpen={() => {}}
-                                                            viewMode='readonly'
-                                                        />
+                                                            sx={{
+                                                                position: 'relative',
+                                                                opacity: site.is_deleted ? 0.7 : 1,
+                                                                '&::before': site.is_deleted ? {
+                                                                    content: '"已删除"',
+                                                                    position: 'absolute',
+                                                                    top: 8,
+                                                                    right: 8,
+                                                                    backgroundColor: 'error.main',
+                                                                    color: 'white',
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 'bold',
+                                                                    padding: '2px 8px',
+                                                                    borderRadius: 1,
+                                                                    zIndex: 1,
+                                                                } : {}
+                                                            }}
+                                                        >
+                                                            <SiteCard
+                                                                site={site}
+                                                                onSettingsOpen={() => {}}
+                                                                viewMode='readonly'
+                                                            />
+                                                        </Box>
                                                     ))}
                                                 </Box>
                                                 {hasMore && (
