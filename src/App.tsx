@@ -638,6 +638,7 @@ function App() {
         api.isAuthenticated = true; // 同步 API 客户端状态
         setIsAuthenticated(true);
         setViewMode('edit');
+        setSortMode(SortMode.None); // 重置为 None 模式以显示操作按钮
 
         // 已认证情况下，尝试从缓存快速加载数据以实现 Early SWR
         const cachedData = loadFromCache(CACHE_DATA_KEY);
@@ -699,6 +700,7 @@ function App() {
         setIsAuthenticated(true);
 
         setViewMode('edit');
+        setSortMode(SortMode.None); // 重置为 None 模式以显示操作按钮
         setUsername(username);
         // 获取用户头像
         try {
