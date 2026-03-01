@@ -10,7 +10,7 @@ CONTAINER_NAME="navtools-app"
 PUBLIC_PORT=8788
 
 # 建议在运行前设置以下环境变量，或在此处硬编码（不推荐）
-# export CLOUDFLARE_API_TOKEN="你的TOKEN"
+export CLOUDFLARE_API_TOKEN="TCAPptCoIL3B-el0-xl0Wc9G1oC3BArDy8AmLGAE"
 
 echo "🚀 开始部署 NavTools..."
 
