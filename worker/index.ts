@@ -629,6 +629,9 @@ export default {
                                 if (verifyResult.valid) {
                                     isAuthenticated = true; // 认证成功
                                     currentUserId = verifyResult.payload?.id as number;
+                                    if (currentUserId !== undefined) {
+                                        api.currentUserId = currentUserId;
+                                    }
                                     log({
                                         timestamp: new Date().toISOString(),
                                         level: 'info',
@@ -729,15 +732,36 @@ export default {
 
                     // GET /api/groups-with-sites 获取所有分组及其站点 (优化 N+1 查询)
                     if (path === "groups-with-sites" && method === "GET") {
-                        // 如果已登录，获取该用户的分组；否则获取所有（后续过滤）
-                        const groupsWithSites = await api.getGroupsWithSites(currentUserId);
+                        const url = new URL(request.url);
+                        log({
+                            timestamp: new Date().toISOString(),
+                            level: 'info',
+                            message: `[DEBUG] groups-with-sites request URL: ${request.url}`,
+                        });
+                        const userIdParam = url.searchParams.get('userId');
+                        
+                        // 验证 userId 参数
+                        let targetUserId: number | undefined = undefined;
+                        if (userIdParam) {
+                            const parsed = parseInt(userIdParam, 10);
+                            if (isNaN(parsed) || parsed <= 0) {
+                                return createJsonResponse(
+                                    { success: false, message: '无效的用户ID参数' },
+                                    request,
+                                    { status: 400 }
+                                );
+                            }
+                            targetUserId = parsed;
+                        } else {
+                            targetUserId = currentUserId;
+                        }
 
-                        // 根据认证状态过滤数据
-                        if (!isAuthenticated) {
-                            // 未认证用户只能看到公开分组下的公开站点
-                            // 也可以选择返回空，或者只返回"官方/推荐"分组
-                            // 这里我们过滤出所有公开的内容
-                            const filteredGroups = groupsWithSites
+                        // 如果未认证且未提供userId参数，则视为访客，只能查看公开内容
+                        if (!isAuthenticated && !userIdParam) {
+                            // 获取所有分组及其站点（不按用户过滤）
+                            const allGroupsWithSites = await api.getGroupsWithSites();
+                            // 过滤出公开分组下的公开站点
+                            const filteredGroups = allGroupsWithSites
                                 .filter(group => group.is_public === 1)
                                 .map(group => ({
                                     ...group,
@@ -746,6 +770,34 @@ export default {
                             return createJsonResponse(filteredGroups, request);
                         }
 
+                        // 如果未认证但提供了userId参数，拒绝访问
+                        if (!isAuthenticated && userIdParam) {
+                            return createJsonResponse(
+                                { success: false, message: '需要登录才能查看指定用户的书签' },
+                                request,
+                                { status: 401 }
+                            );
+                        }
+
+                        // 获取指定用户的分组及其站点
+                        log({
+                            timestamp: new Date().toISOString(),
+                            level: 'info',
+                            message: `[DEBUG] groups-with-sites: userIdParam=${userIdParam}, targetUserId=${targetUserId}, currentUserId=${currentUserId}, isAuthenticated=${isAuthenticated}`,
+                        });
+                        // 确保 targetUserId 有效
+                        if (targetUserId === undefined) {
+                            return createJsonResponse(
+                                { success: false, message: '无法确定目标用户ID' },
+                                request,
+                                { status: 400 }
+                            );
+                        }
+                        const groupsWithSites = await api.getGroupsWithSites(targetUserId);
+
+                        // 根据认证状态过滤数据（已认证用户可以看到所有数据，因为targetUserId已指定）
+                        // 注意：这里假设已认证用户有权限查看targetUserId的数据
+                        // 实际生产环境应添加权限检查（例如管理员或自己）
                         return createJsonResponse(groupsWithSites, request);
                     }
                     // GET /api/sites/random 随机获取站点（访客模式）

@@ -28,6 +28,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [groups, setGroups] = useState<any[]>([]);
+    const [visibleSiteCounts, setVisibleSiteCounts] = useState<Record<number, number>>({});
 
     useEffect(() => {
         if (open && userId) {
@@ -53,6 +54,13 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
         setGroups([]);
         setError(null);
         onClose();
+    };
+
+    const handleShowMore = (groupId: number) => {
+        setVisibleSiteCounts(prev => ({
+            ...prev,
+            [groupId]: (prev[groupId] || 5) + 10, // 每次增加10个站点
+        }));
     };
 
     return (
@@ -115,16 +123,37 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                         />
                                     </Box>
                                     
-                                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
-                                        {group.sites?.map((site: any) => (
-                                            <SiteCard
-                                                key={site.id}
-                                                site={site}
-                                                onSettingsOpen={() => {}}
-                                                viewMode='readonly'
-                                            />
-                                        ))}
-                                    </Box>
+                                    {(() => {
+                                        const visibleCount = visibleSiteCounts[group.id] || 5;
+                                        const sitesToShow = group.sites?.slice(0, visibleCount) || [];
+                                        const totalSites = group.sites?.length || 0;
+                                        const hasMore = totalSites > visibleCount;
+                                        return (
+                                            <>
+                                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
+                                                    {sitesToShow.map((site: any) => (
+                                                        <SiteCard
+                                                            key={site.id}
+                                                            site={site}
+                                                            onSettingsOpen={() => {}}
+                                                            viewMode='readonly'
+                                                        />
+                                                    ))}
+                                                </Box>
+                                                {hasMore && (
+                                                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                                                        <Button 
+                                                            variant="outlined" 
+                                                            size="small"
+                                                            onClick={() => handleShowMore(group.id)}
+                                                        >
+                                                            显示更多 ({totalSites - visibleCount} 个)
+                                                        </Button>
+                                                    </Box>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </CardContent>
                             </Card>
                         ))}

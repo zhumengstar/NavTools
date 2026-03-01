@@ -245,7 +245,7 @@ export class NavigationClient {
 
   // 获取所有分组及其站点 (使用 JOIN 优化,避免 N+1 查询)
   async getGroupsWithSites(userId?: number): Promise<GroupWithSites[]> {
-    const endpoint = userId ? `groups-with-sites?userId=${userId}` : 'groups-with-sites';
+    const endpoint = userId !== undefined ? `groups-with-sites?userId=${userId}` : 'groups-with-sites';
     return this.request(endpoint);
   }
 
