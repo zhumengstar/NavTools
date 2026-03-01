@@ -2097,21 +2097,12 @@ export default {
                         };
 
                         // ===== 意图识别模块（使用大模型）=====
-                        // 选择一个轻量级模型进行意图识别，降低成本
-                        const getIntentModel = (): string => {
-                            // 优先使用轻量级模型进行意图识别
-                            if (selectedModel.includes('gemini-2.5-flash')) return 'gemini-2.5-flash';
-                            if (selectedModel.includes('gemini') && selectedModel.includes('flash')) return selectedModel;
-                            if (selectedModel.includes('kimi')) return 'kimi-k2.5';
-                            // 默认使用用户选择的模型
-                            return selectedModel;
-                        };
-
+                        // 使用用户当前选择的模型进行意图识别
                         let shouldLoadBookmarks = false;
                         let intentReason = '';
                         
                         try {
-                            const intentModel = getIntentModel();
+                            const intentModel = selectedModel;
                             const intentPrompt = `你是一个意图识别助手。请分析用户的问题，判断是否需要查询用户的书签/收藏数据。
 
 用户问题："${body.message}"
