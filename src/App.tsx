@@ -242,6 +242,7 @@ function App() {
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
@@ -625,6 +626,7 @@ function App() {
         setIsAuthenticated(false);
         setIsAdmin(false);
         setViewMode('readonly');
+        setCurrentUserId(null);
         setUsername('User');
         setAvatarUrl(null);
 
@@ -652,6 +654,9 @@ function App() {
         if (cachedProfile) {
           setUsername(cachedProfile.username);
           setAvatarUrl(cachedProfile.avatar_url || null);
+          if (cachedProfile.id) {
+            setCurrentUserId(cachedProfile.id);
+          }
           const adminStatus = cachedProfile.role === 'admin';
           setIsAdmin(adminStatus);
           setConfigs(prev => ({ ...prev, isAdmin: adminStatus ? 'true' : 'false' }));
@@ -660,6 +665,9 @@ function App() {
         // 获取详细用户资料以确定角色 (并行更新)
         try {
           const profile = await (api as any).getUserProfile();
+          if (profile.id) {
+            setCurrentUserId(profile.id);
+          }
           const adminStatus = profile.role === 'admin';
 
           // 批量更新状态以减少渲染
@@ -702,6 +710,9 @@ function App() {
         setViewMode('edit');
         setSortMode(SortMode.None); // 重置为 None 模式以显示操作按钮
         setUsername(username);
+        if (loginResponse.userId) {
+          setCurrentUserId(loginResponse.userId);
+        }
         // 获取用户头像
         try {
           if (loginResponse.userId) {
@@ -881,6 +892,7 @@ function App() {
 
     setIsAuthenticated(false);
     setUsername('User');
+    setCurrentUserId(null);
     setAvatarUrl(null);
     setIsAdmin(false);
     setViewMode('readonly');
@@ -2989,6 +3001,7 @@ function App() {
                                       globalToggleVersion={globalToggleVersion}
                                       onBatchFeaturedUpdate={handleBatchFeaturedUpdate}
                                       isAdmin={isAdmin}
+                                      currentUserId={currentUserId ?? undefined}
                                     />
                                   ))}
                                   {displayGroups.length > visibleGroupsCount && (

@@ -20,6 +20,7 @@ interface EditGroupDialogProps {
   onClose: () => void;
   onSave: (group: Group) => void;
   onDelete: (groupId: number) => void;
+  canDelete?: boolean; // 是否有权限删除分组
 }
 
 const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
@@ -28,6 +29,7 @@ const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
   onClose,
   onSave,
   onDelete,
+  canDelete = true,
 }) => {
   const [name, setName] = useState('');
   const [isPublic, setIsPublic] = useState(true); // 新增：公开/私密状态
@@ -123,7 +125,7 @@ const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
             <Button onClick={onClose} color='inherit'>
               取消
             </Button>
-            {group.is_protected !== 1 && (
+            {canDelete && group.is_protected !== 1 && (
               <Button onClick={handleDelete} color='error' variant='outlined'>
                 删除
               </Button>

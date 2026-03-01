@@ -99,6 +99,7 @@ interface GroupCardProps {
   onSettingsOpen?: (siteId: number) => Promise<void> | void; // 新增：打开设置回调
   globalToggleVersion?: { type: 'expand' | 'collapse'; ts: number }; // 新增：全局切换指令
   isAdmin?: boolean; // 新增：明确的管理员标志
+  currentUserId?: number; // 新增：当前登录用户ID
 }
 
 const GroupCard: React.FC<GroupCardProps> = React.memo(({
@@ -120,6 +121,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
   globalToggleVersion,
   index, // 解构 index
   isAdmin, // 解构 isAdmin
+  currentUserId, // 解构 currentUserId
 }) => {
   // 添加编辑弹窗的状态
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -584,6 +586,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
             onClose={() => setEditDialogOpen(false)}
             onSave={handleUpdateGroup}
             onDelete={handleDeleteGroup}
+            canDelete={isAdmin || group.user_id === currentUserId}
           />
         )
       }
