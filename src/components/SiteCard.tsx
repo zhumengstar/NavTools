@@ -599,54 +599,56 @@ const SiteCard = memo(function SiteCard({
             },
           }}
         >
-          {/* 拖拽手柄 - 只有按住这里才能拖拽，默认隐藏，悬停显示 */}
-          <Box
-            {...listeners}
-            className="drag-handle"
-            sx={{
-              position: 'absolute',
-              top: 8,
-              left: isBatchMode ? 44 : 12, // 批量模式时避开复选框
-              zIndex: 25,
-              width: 24,
-              height: 24,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'grab',
-              borderRadius: '6px',
-              opacity: 0,
-              visibility: 'hidden',
-              transition: 'all 0.2s ease',
-              backgroundColor: (theme) =>
-                theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
-              boxShadow: (theme) =>
-                theme.palette.mode === 'dark' 
-                  ? '0 2px 8px rgba(0,0,0,0.4)' 
-                  : '0 2px 8px rgba(0,0,0,0.1)',
-              border: (theme) =>
-                `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-              '&:hover': {
+          {/* 拖拽手柄 - 只有按住这里才能拖拽，默认隐藏，悬停显示，批量模式下隐藏 */}
+          {!isBatchMode && (
+            <Box
+              {...listeners}
+              className="drag-handle"
+              sx={{
+                position: 'absolute',
+                top: 8,
+                left: 12,
+                zIndex: 25,
+                width: 24,
+                height: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'grab',
+                borderRadius: '6px',
+                opacity: 0,
+                visibility: 'hidden',
+                transition: 'all 0.2s ease',
                 backgroundColor: (theme) =>
-                  theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,1)',
-                transform: 'scale(1.1)',
-              },
-              '&:active': {
-                cursor: 'grabbing',
-                transform: 'scale(0.95)',
-              },
-            }}
-            title="按住拖拽排序"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.6 }}>
-              <circle cx="4" cy="4" r="1.5" />
-              <circle cx="4" cy="8" r="1.5" />
-              <circle cx="4" cy="12" r="1.5" />
-              <circle cx="12" cy="4" r="1.5" />
-              <circle cx="12" cy="8" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-            </svg>
-          </Box>
+                  theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
+                boxShadow: (theme) =>
+                  theme.palette.mode === 'dark' 
+                    ? '0 2px 8px rgba(0,0,0,0.4)' 
+                    : '0 2px 8px rgba(0,0,0,0.1)',
+                border: (theme) =>
+                  `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                '&:hover': {
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,1)',
+                  transform: 'scale(1.1)',
+                },
+                '&:active': {
+                  cursor: 'grabbing',
+                  transform: 'scale(0.95)',
+                },
+              }}
+              title="按住拖拽排序"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.6 }}>
+                <circle cx="4" cy="4" r="1.5" />
+                <circle cx="4" cy="8" r="1.5" />
+                <circle cx="4" cy="12" r="1.5" />
+                <circle cx="12" cy="4" r="1.5" />
+                <circle cx="12" cy="8" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+              </svg>
+            </Box>
+          )}
           {/* 卡片内容 */}
           {cardContent}
         </Box>
