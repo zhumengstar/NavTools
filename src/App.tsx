@@ -260,7 +260,10 @@ function App() {
 
   // 访问模式状态 (readonly: 访客模式, edit: 编辑模式)
   type ViewMode = 'readonly' | 'edit';
-  const [viewMode, setViewMode] = useState<ViewMode>('readonly');
+  // 从缓存预判用户状态，提前显示编辑按钮
+  const cachedProfile = loadFromCache(CACHE_PROFILE_KEY);
+  const initialViewMode: ViewMode = cachedProfile ? 'edit' : 'readonly';
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
 
   // 配置状态
   const [configs, setConfigs] = useState<Record<string, string>>(DEFAULT_CONFIGS);

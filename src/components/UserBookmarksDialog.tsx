@@ -221,21 +221,24 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                                 size="small"
                                                 color="error"
                                                 variant="outlined"
+                                                sx={{ flexShrink: 0 }}
                                             />
                                         )}
                                         <Chip 
                                             label={`${group.sites?.length || 0} 个书签`}
                                             size="small"
                                             variant="outlined"
+                                            sx={{ flexShrink: 0 }}
                                         />
                                         <Tooltip title="编辑分组">
                                             <IconButton
                                                 size="small"
+                                                color="primary"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleEditClick(group);
                                                 }}
-                                                sx={{ ml: 1 }}
+                                                sx={{ ml: 1, flexShrink: 0 }}
                                             >
                                                 <EditIcon fontSize="small" />
                                             </IconButton>
