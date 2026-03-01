@@ -1,5 +1,5 @@
 // src/components/SiteCard.tsx
-import { useState, memo, useEffect } from 'react';
+import { useState, memo, useEffect, useRef } from 'react';
 import { Site } from '../API/http';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -13,6 +13,7 @@ import {
   Box,
   Tooltip,
   Checkbox,
+  Skeleton,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RecommendIcon from '@mui/icons-material/Recommend';
@@ -47,11 +48,38 @@ const SiteCard = memo(function SiteCard({
 }: SiteCardProps) {
   const [iconError, setIconError] = useState(!site.icon);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const iconRef = useRef<HTMLDivElement>(null);
+
+  // 使用 IntersectionObserver 实现图标懒加载
+  useEffect(() => {
+    const element = iconRef.current;
+    if (!element || !site.icon) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true);
+            observer.disconnect(); // 一旦进入视图就停止观察
+          }
+        });
+      },
+      {
+        rootMargin: '100px', // 提前 100px 开始加载
+        threshold: 0,
+      }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [site.icon]);
 
   // 当 site.icon 真正改变时，重置错误状态和加载状态
   useEffect(() => {
     setIconError(!site.icon);
     setImageLoaded(false);
+    setIsInView(false);
   }, [site.icon]);
 
   // 使用dnd-kit的useSortable hook - 始终启用拖拽（除批量模式外）
@@ -182,22 +210,27 @@ const SiteCard = memo(function SiteCard({
             {/* 图标和名称 */}
             <Box display='flex' alignItems='center' mb={1}>
               {!iconError && site.icon ? (
-                <Box sx={{ position: 'relative', mr: 1.5, width: 32, height: 32, flexShrink: 0, display: 'flex' }}>
-                  <Box
-                    component='img'
-                    src={site.icon}
-                    alt={site.name}
-                    sx={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 1,
-                      objectFit: 'cover',
-                      // 在编辑模式下不显示骨架屏和淡入效果，以保持拖拽时的图标稳定
-                      opacity: imageLoaded ? 1 : (isEditMode ? 1 : 0),
-                    }}
-                    onError={handleIconError}
-                    onLoad={handleImageLoad}
-                  />
+                <Box ref={iconRef} sx={{ position: 'relative', mr: 1.5, width: 32, height: 32, flexShrink: 0, display: 'flex' }}>
+                  {isInView ? (
+                    <Box
+                      component='img'
+                      src={site.icon}
+                      alt={site.name}
+                      loading="lazy"
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 1,
+                        objectFit: 'cover',
+                        // 在编辑模式下不显示骨架屏和淡入效果，以保持拖拽时的图标稳定
+                        opacity: imageLoaded ? 1 : (isEditMode ? 1 : 0),
+                      }}
+                      onError={handleIconError}
+                      onLoad={handleImageLoad}
+                    />
+                  ) : (
+                    <Skeleton variant="rounded" width={32} height={32} sx={{ borderRadius: 1 }} />
+                  )}
                 </Box>
               ) : (
                 <Box
@@ -226,23 +259,10 @@ const SiteCard = memo(function SiteCard({
                 title={site.name}
                 arrow
                 placement="top"
-                enterDelay={300}
-                leaveDelay={200}
-                disableInteractive={false}
-                componentsProps={{
-                  tooltip: {
-                    sx: {
-                      fontSize: '1rem',
-                      lineHeight: 1.5,
-                      p: 1,
-                      cursor: 'text',
-                      userSelect: 'text',
-                      pointerEvents: 'auto'
-                    },
-                    onMouseDown: (e: any) => e.stopPropagation(),
-                    onClick: (e: any) => e.stopPropagation(),
-                  }
-                }}
+                enterDelay={500}
+                leaveDelay={100}
+                disableInteractive
+                disableHoverListener={site.name.length < 20}
               >
                 <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em', minWidth: 0 }}>
                   <Typography
@@ -285,21 +305,10 @@ const SiteCard = memo(function SiteCard({
               title={site.description && site.description !== site.name ? site.description : ""}
               arrow
               placement="top"
-              enterDelay={300}
-              leaveDelay={200}
-              disableInteractive={false}
+              enterDelay={500}
+              leaveDelay={100}
+              disableInteractive
               disableHoverListener={!site.description || site.description === site.name}
-              componentsProps={{
-                tooltip: {
-                  sx: {
-                    cursor: 'text',
-                    userSelect: 'text',
-                    pointerEvents: 'auto'
-                  },
-                  onMouseDown: (e: any) => e.stopPropagation(),
-                  onClick: (e: any) => e.stopPropagation(),
-                }
-              }}
             >
               <Typography
                 variant='body2'
@@ -356,6 +365,15 @@ const SiteCard = memo(function SiteCard({
                           theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)',
                         borderRadius: '4px',
                         boxShadow: 1,
+                        '&:hover': {
+                          backgroundColor: (theme) =>
+                            theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                        },
+                        '&.Mui-checked': {
+                          '& .MuiSvgIcon-root': {
+                            fontSize: '1.2rem',
+                          },
+                        },
                       }}
                     />
                   </Box>
@@ -364,21 +382,26 @@ const SiteCard = memo(function SiteCard({
                 {/* 图标和名称 */}
                 <Box display='flex' alignItems='center' mb={1}>
                   {!iconError && site.icon ? (
-                    <Box sx={{ position: 'relative', mr: 1.5, width: 32, height: 32, flexShrink: 0, display: 'flex' }}>
-                      <Box
-                        component='img'
-                        src={site.icon}
-                        alt={site.name}
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 1,
-                          objectFit: 'cover',
-                          opacity: imageLoaded ? 1 : 0.5, // 初始加载时显示一半透明度而非完全隐藏或占位
-                        }}
-                        onError={handleIconError}
-                        onLoad={handleImageLoad}
-                      />
+                    <Box ref={iconRef} sx={{ position: 'relative', mr: 1.5, width: 32, height: 32, flexShrink: 0, display: 'flex' }}>
+                      {isInView ? (
+                        <Box
+                          component='img'
+                          src={site.icon}
+                          alt={site.name}
+                          loading="lazy"
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 1,
+                            objectFit: 'cover',
+                            opacity: imageLoaded ? 1 : 0.5, // 初始加载时显示一半透明度而非完全隐藏或占位
+                          }}
+                          onError={handleIconError}
+                          onLoad={handleImageLoad}
+                        />
+                      ) : (
+                        <Skeleton variant="rounded" width={32} height={32} sx={{ borderRadius: 1 }} />
+                      )}
                     </Box>
                   ) : (
                     <Box
@@ -407,23 +430,10 @@ const SiteCard = memo(function SiteCard({
                     title={site.name}
                     arrow
                     placement="top"
-                    enterDelay={300}
-                    leaveDelay={200}
-                    disableInteractive={false}
-                    componentsProps={{
-                      tooltip: {
-                        sx: {
-                          fontSize: '1rem',
-                          lineHeight: 1.5,
-                          p: 1,
-                          cursor: 'text',
-                          userSelect: 'text',
-                          pointerEvents: 'auto'
-                        },
-                        onMouseDown: (e: any) => e.stopPropagation(),
-                        onClick: (e: any) => e.stopPropagation(),
-                      }
-                    }}
+                    enterDelay={500}
+                    leaveDelay={100}
+                    disableInteractive
+                    disableHoverListener={site.name.length < 20}
                   >
                     <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em', minWidth: 0 }}>
                       <Typography
@@ -465,21 +475,10 @@ const SiteCard = memo(function SiteCard({
                   title={site.description && site.description !== site.name ? site.description : ""}
                   arrow
                   placement="top"
-                  enterDelay={300}
-                  leaveDelay={200}
-                  disableInteractive={false}
+                  enterDelay={500}
+                  leaveDelay={100}
+                  disableInteractive
                   disableHoverListener={!site.description || site.description === site.name}
-                  componentsProps={{
-                    tooltip: {
-                      sx: {
-                        cursor: 'text',
-                        userSelect: 'text',
-                        pointerEvents: 'auto'
-                      },
-                      onMouseDown: (e: any) => e.stopPropagation(),
-                      onClick: (e: any) => e.stopPropagation(),
-                    }
-                  }}
                 >
                   <Typography
                     variant='body2'

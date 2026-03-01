@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Site, Group } from '../API/http';
 import SiteCard from './SiteCard';
 import { GroupWithSites } from '../types';
@@ -19,6 +19,7 @@ import {
   IconButton,
   Tooltip,
   Collapse,
+  Skeleton,
 } from '@mui/material';
 
 import AddIcon from '@mui/icons-material/Add';
@@ -29,6 +30,48 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import DeselectIcon from '@mui/icons-material/Deselect';
 import CloseIcon from '@mui/icons-material/Close';
+
+// 站点卡片骨架屏
+const SiteCardSkeleton = () => (
+  <Box
+    sx={{
+      width: {
+        xs: '50%',
+        sm: '33.33%',
+        md: '25%',
+        lg: '20%',
+        xl: '16.666%',
+      },
+      padding: 1,
+      boxSizing: 'border-box',
+    }}
+  >
+    <Paper
+      sx={{
+        height: '100%',
+        minHeight: { xs: 100, sm: 110 },
+        borderRadius: 3,
+        p: { xs: 1.5, sm: 2 },
+        display: 'flex',
+        flexDirection: 'column',
+        border: '1px solid',
+        borderColor: 'divider',
+        backgroundColor: (theme) =>
+          theme.palette.mode === 'dark' ? 'rgba(33, 33, 33, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+      }}
+    >
+      <Box display='flex' alignItems='center' mb={1}>
+        <Skeleton variant="rounded" width={32} height={32} sx={{ mr: 1.5, borderRadius: 1 }} />
+        <Box sx={{ flex: 1 }}>
+          <Skeleton variant="text" width="60%" sx={{ fontSize: '0.875rem' }} />
+          <Skeleton variant="text" width="40%" sx={{ fontSize: '0.7rem' }} />
+        </Box>
+      </Box>
+      <Skeleton variant="text" width="90%" />
+      <Skeleton variant="text" width="40%" />
+    </Paper>
+  </Box>
+);
 
 // 可拖放的分组容器组件
 function DroppableGroupContainer({
@@ -129,6 +172,10 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedSiteIds, setSelectedSiteIds] = useState<Set<number>>(new Set());
 
+  // 延迟渲染状态：用于优化大量站点卡片的渲染性能
+  const [shouldRenderContent, setShouldRenderContent] = useState(false);
+  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // 切换选中状态
   const handleToggleSelection = (siteId: number) => {
     setSelectedSiteIds(prev => {
@@ -182,6 +229,37 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
     // 如果没有新版状态，默认为 true (合上)
     return savedState === null ? true : JSON.parse(savedState);
   });
+
+  // 延迟渲染逻辑：展开时延迟渲染内容，折叠时立即清除
+  useEffect(() => {
+    // 清除之前的定时器
+    if (renderTimerRef.current) {
+      clearTimeout(renderTimerRef.current);
+      renderTimerRef.current = null;
+    }
+
+    if (!isCollapsed) {
+      // 展开时：使用 requestAnimationFrame 进行延迟渲染，避免阻塞 UI
+      // 如果站点数量较多，分批渲染
+      const siteCount = group.sites?.length || 0;
+      const delay = siteCount > 50 ? 50 : (siteCount > 20 ? 30 : 16); // 根据站点数量调整延迟
+
+      renderTimerRef.current = setTimeout(() => {
+        requestAnimationFrame(() => {
+          setShouldRenderContent(true);
+        });
+      }, delay);
+    } else {
+      // 折叠时：立即清除渲染状态
+      setShouldRenderContent(false);
+    }
+
+    return () => {
+      if (renderTimerRef.current) {
+        clearTimeout(renderTimerRef.current);
+      }
+    };
+  }, [isCollapsed, group.sites?.length]);
 
   // 保存折叠状态到本地存储
   useEffect(() => {
@@ -579,7 +657,16 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
 
       {/* 使用 Collapse 组件包装站点卡片区域，并实现按需渲染 */}
       <Collapse in={!isCollapsed} timeout='auto' unmountOnExit>
-        {!isCollapsed && renderSites()}
+        {shouldRenderContent ? (
+          renderSites()
+        ) : !isCollapsed ? (
+          // 显示骨架屏占位
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: -1 }}>
+            {Array.from({ length: Math.min(6, group.sites?.length || 6) }).map((_, i) => (
+              <SiteCardSkeleton key={i} />
+            ))}
+          </Box>
+        ) : null}
       </Collapse>
 
       {/* 编辑分组弹窗 */}

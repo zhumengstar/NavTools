@@ -739,7 +739,7 @@ function App() {
         setIsLoginOpen(false);
         setLoginLoading(false);
 
-        // 如果勾选了“记住我”，保存加密后的账号密码
+        // 如果勾选了"记住我"，保存加密后的账号密码
         if (rememberMe) {
           try {
             const credentials = btoa(`${username}:${password}`);
@@ -914,16 +914,18 @@ function App() {
         console.log('[Init] 启动初始化流程...');
 
         // --- 性能优化：静默缓存预加载 ---
-        // 仅在后台读取缓存数据，供后续 fetchData 进行 Diff 对比或静默填充
-        // 不在这里开启 setIsInitialDataLoaded(true)，防止未校验身份前就显示过时数据
+        // 优先从缓存加载配置，实现即时显示
         const cachedConfigs = loadFromCache(CACHE_CONFIG_KEY);
         if (cachedConfigs) {
           setConfigs(prev => ({ ...prev, ...cachedConfigs }));
           setTempConfigs(prev => ({ ...prev, ...cachedConfigs }));
         }
 
+        // 优先从缓存加载数据，实现即时显示
         const cachedData = loadFromCache(CACHE_DATA_KEY);
-        if (cachedData && Array.isArray(cachedData)) {
+        const hasCachedData = cachedData && Array.isArray(cachedData) && cachedData.length > 0;
+
+        if (hasCachedData) {
           console.log('[Init] 预加载本地缓存数据并过滤回收站内容 (Silent)');
           // 应用过滤规则：彻底剔除回收站和逻辑删除内容
           const filteredCache = cachedData
@@ -944,10 +946,13 @@ function App() {
             .sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0));
 
           setGroups(filteredCache);
+          // 有缓存数据时，不显示 loading 骨架屏，直接显示缓存内容
+          setLoading(false);
+          setIsInitialDataLoaded(true); // 提前开启栅栏，让用户看到缓存数据
+        } else {
+          // 没有缓存数据时，显示 loading 骨架屏
+          setLoading(true);
         }
-
-        // 初始设为加载中，保持 Skeleton 稳定
-        setLoading(true);
 
         setIsAuthChecking(true);
 
@@ -961,14 +966,17 @@ function App() {
 
         // 3. 仅在已认证时加载业务数据（访客不加载，显示 VisitorHome）
         if (api.isAuthenticated) {
-          await fetchData(true); // 初始同步优先使用静默模式，防止界面跳变
+          // 使用静默模式更新数据，避免界面跳变
+          await fetchData(true);
           setIsDataSynced(true); // 标记实时数据已到达
         } else {
-          setIsDataSynced(true); // 访客模式也视为“同步”完成
+          setIsDataSynced(true); // 访客模式也视为"同步"完成
         }
 
-        // 4. 全部准备就绪后，标记初次数据加载完成，开启栅栏
-        setIsInitialDataLoaded(true);
+        // 4. 如果之前没有缓存数据，现在开启栅栏
+        if (!hasCachedData) {
+          setIsInitialDataLoaded(true);
+        }
         console.log('[Init] 初始化流程完成，栅栏已开启');
 
       } catch (error) {
@@ -1268,7 +1276,7 @@ function App() {
         }
 
         // 检查是否需要后台补全
-        // 启发式规则：如果名称等于 URL 的域名，且描述为空，则认为是“占位符”状态，尝试补全
+        // 启发式规则：如果名称等于 URL 的域名，且描述为空，则认为是"占位符"状态，尝试补全
         const domain = extractDomain(updatedSite.url);
         if (updatedSite.name === domain && !updatedSite.description) {
           enrichSiteInBackground(updatedSite.id, updatedSite.url);
@@ -3515,7 +3523,7 @@ function App() {
                               <Box>
                                 <Typography variant='body1'>启用忘记密码功能</Typography>
                                 <Typography variant='caption' color='text.secondary'>
-                                  关闭后，登录界面将不再显示“忘记密码”链接
+                                  关闭后，登录界面将不再显示"忘记密码"链接
                                 </Typography>
                               </Box>
                             }
