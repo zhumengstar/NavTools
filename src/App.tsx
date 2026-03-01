@@ -142,7 +142,7 @@ const useMockApi = import.meta.env.VITE_USE_MOCK === 'true';
 
 const api = useMockApi
   ? new MockNavigationClient()
-  : new NavigationClient('https://nav.1997121.xyz/api');
+  : new NavigationClient(import.meta.env.VITE_API_BASE_URL || '/api');
 
 // 将全局 api 实例挂载到 window 方便调试和部分组件访问 (可选)
 if (typeof window !== 'undefined') {

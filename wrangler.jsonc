@@ -1,7 +1,3 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
     "$schema": "node_modules/wrangler/config-schema.json",
     "name": "navtools",
@@ -11,12 +7,11 @@
     "compatibility_flags": [
         "nodejs_compat",
         "no_handle_cross_request_promise_resolution"
-    ], // 必须启用 Node.js 兼容
+    ],
     "assets": {
         "directory": "dist",
         "not_found_handling": "single-page-application"
     },
-    // D1数据库绑定
     "d1_databases": [
         {
             "binding": "DB",
@@ -24,7 +19,6 @@
             "database_id": "2539afd9-931b-444b-8bc7-2e0816242ba8"
         }
     ],
-    // KV 命名空间绑定 - 用于存储验证码
     "kv_namespaces": [
         {
             "binding": "KV",
@@ -32,13 +26,14 @@
         }
     ],
     "vars": {
+        "VITE_API_BASE_URL": "/api",
         "AUTH_ENABLED": "true",
         "AUTH_USERNAME": "admin",
         "AUTH_PASSWORD": "$2y$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG",
         "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[(",
-        "EMAIL_API_KEY": "", // 请在 resend.com 免费注册并填入 API Key
-        "EMAIL_FROM": "onboarding@resend.dev", // Resend 默认的免费发件人（测试用）
-        "AI_BASE_URL": "https://cliproxy.1997121.xyz", // 外部 AI 提供商 Base URL
-        "AI_API_KEY": "WzIw4JJM9ZVx_HAKD1a2O4igBfz65T4x" // 外部 AI 提供商 API Key (请填入)
+        "EMAIL_API_KEY": "",
+        "EMAIL_FROM": "onboarding@resend.dev",
+        "AI_BASE_URL": "https://cliproxy.1997121.xyz",
+        "AI_API_KEY": "WzIw4JJM9ZVx_HAKD1a2O4igBfz65T4x"
     }
 }

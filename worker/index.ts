@@ -206,11 +206,6 @@ function validateExportData(data: unknown): { valid: boolean; errors: string[] }
 }
 
 // CORS 配置
-const ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://localhost:8788',
-    // 生产环境会自动允许同源
-];
 
 /**
  * 获取 CORS 头
@@ -219,21 +214,22 @@ function getCorsHeaders(request: Request): Record<string, string> {
     const origin = request.headers.get('Origin');
     const requestUrl = new URL(request.url);
 
-    // 如果是同源请求，允许
+    // 动态允许所有来源的 8788/8787 端口访问，或同源访问
     let allowedOrigin: string | null = null;
 
     if (origin) {
-        // 检查是否在允许列表中，或者是 workers.dev 子域名
-        const isAllowed = ALLOWED_ORIGINS.includes(origin) ||
-            origin.endsWith('.workers.dev') ||
-            origin === requestUrl.origin; // 同源
+        const originUrl = new URL(origin);
+        // 允许任何 IP/域名的 8787/8788 端口，以及所有的 .workers.dev
+        const isAllowed = originUrl.port === '8787' || 
+                         originUrl.port === '8788' ||
+                         origin.endsWith('.workers.dev') ||
+                         origin === requestUrl.origin;
 
         allowedOrigin = isAllowed ? origin : null;
     }
 
-    // 如果没有匹配的 origin，使用第一个允许的 origin 或请求源作为默认值
-    // 绝不使用通配符 '*'，以增强安全性
-    const finalOrigin = allowedOrigin || ALLOWED_ORIGINS[0] || requestUrl.origin;
+    // 默认回退到请求的 Origin (如果存在) 或同源，实现完全动态
+    const finalOrigin = allowedOrigin || origin || requestUrl.origin;
 
     return {
         'Access-Control-Allow-Origin': finalOrigin,
