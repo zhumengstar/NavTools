@@ -2091,7 +2091,7 @@ export default {
                                     const errorText = await chatResponse.text();
                                     throw new Error(`External API Error: ${chatResponse.status} ${errorText}`);
                                 }
-                                const result = await chatResponse.json();
+                                const result = await chatResponse.json() as { choices?: [{ message?: { content?: string } }] };
                                 return result.choices?.[0]?.message?.content || '';
                             }
                         };
@@ -2363,7 +2363,7 @@ ${bookmarkContext}
                                 ];
 
                                 console.log(`[AI Chat] 处理第 ${i + 1}/${batchCount} 批...`);
-                                const batchResult = await callAI(messages, false);
+                                const batchResult = await callAI(messages);
                                 batchResults.push(`【第 ${i + 1} 批分析】\n${batchResult}`);
                             }
 
@@ -2392,7 +2392,7 @@ ${batchResults.join('\n\n')}
                                 { role: 'user' as const, content: mergePrompt },
                             ];
 
-                            const finalResponse = await callAI(finalMessages, false);
+                            const finalResponse = await callAI(finalMessages);
 
                             // 返回非流式响应
                             return createJsonResponse({
