@@ -2052,36 +2052,69 @@ export default {
                         // 查询用户书签数据作为上下文
                         let bookmarkContext = '';
                         try {
-                            // 确保只查询当前用户的书签
-                            // 如果未启用认证或未登录，默认使用管理员账号(ID=1)的数据，或者也可以选择不返回数据
-                            const userId = currentUserId || 1;
+                            if (isAuthenticated && currentUserId) {
+                                // 已登录用户：查询该用户的所有书签
+                                const userId = currentUserId;
+                                
+                                const groups = await env.DB.prepare(
+                                    'SELECT id, name FROM groups WHERE user_id = ? AND is_deleted = 0 ORDER BY order_num'
+                                ).bind(userId).all();
 
-                            const groups = await env.DB.prepare(
-                                'SELECT id, name FROM groups WHERE user_id = ? ORDER BY order_num'
-                            ).bind(userId).all();
+                                const sites = await env.DB.prepare(
+                                    `SELECT s.name, s.url, s.description, s.group_id 
+                                 FROM sites s 
+                                 JOIN groups g ON s.group_id = g.id 
+                                 WHERE g.user_id = ? AND s.is_deleted = 0
+                                 ORDER BY s.order_num 
+                                 LIMIT ${maxSites}`
+                                ).bind(userId).all();
 
-                            const sites = await env.DB.prepare(
-                                `SELECT s.name, s.url, s.description, s.group_id 
-                             FROM sites s 
-                             JOIN groups g ON s.group_id = g.id 
-                             WHERE g.user_id = ? 
-                             ORDER BY s.order_num 
-                             LIMIT ${maxSites}`
-                            ).bind(userId).all();
-
-                            if (groups.results && sites.results) {
-                                const groupMap = new Map<number, string>();
-                                for (const g of groups.results as { id: number; name: string }[]) {
-                                    groupMap.set(g.id, g.name);
+                                if (groups.results && sites.results) {
+                                    const groupMap = new Map<number, string>();
+                                    for (const g of groups.results as { id: number; name: string }[]) {
+                                        groupMap.set(g.id, g.name);
+                                    }
+                                    const lines: string[] = [];
+                                    for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
+                                        const gName = groupMap.get(s.group_id) || '未分组';
+                                        lines.push(`[${gName}] ${s.name}: ${s.url}${s.description ? ' - ' + s.description : ''}`);
+                                    }
+                                    bookmarkContext = lines.join('\n');
+                                    if (bookmarkContext.length > maxContextChars) {
+                                        bookmarkContext = bookmarkContext.substring(0, maxContextChars) + '\n...(更多书签已省略)';
+                                    }
                                 }
-                                const lines: string[] = [];
-                                for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
-                                    const gName = groupMap.get(s.group_id) || '未分组';
-                                    lines.push(`[${gName}] ${s.name}: ${s.url}${s.description ? ' - ' + s.description : ''}`);
-                                }
-                                bookmarkContext = lines.join('\n');
-                                if (bookmarkContext.length > maxContextChars) {
-                                    bookmarkContext = bookmarkContext.substring(0, maxContextChars) + '\n...(更多书签已省略)';
+                            } else {
+                                // 访客模式：只查询精选的公开内容
+                                // 条件：sites.is_featured = 1, sites.is_public = 1, groups.is_public = 1, 且未删除
+                                const groups = await env.DB.prepare(
+                                    'SELECT id, name FROM groups WHERE is_public = 1 AND is_deleted = 0 ORDER BY order_num'
+                                ).all();
+
+                                const sites = await env.DB.prepare(
+                                    `SELECT s.name, s.url, s.description, s.group_id 
+                                 FROM sites s 
+                                 JOIN groups g ON s.group_id = g.id 
+                                 WHERE s.is_featured = 1 AND s.is_public = 1 AND g.is_public = 1 
+                                 AND s.is_deleted = 0 AND g.is_deleted = 0
+                                 ORDER BY s.order_num 
+                                 LIMIT ${maxSites}`
+                                ).all();
+
+                                if (groups.results && sites.results) {
+                                    const groupMap = new Map<number, string>();
+                                    for (const g of groups.results as { id: number; name: string }[]) {
+                                        groupMap.set(g.id, g.name);
+                                    }
+                                    const lines: string[] = [];
+                                    for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
+                                        const gName = groupMap.get(s.group_id) || '未分组';
+                                        lines.push(`[${gName}] ${s.name}: ${s.url}${s.description ? ' - ' + s.description : ''}`);
+                                    }
+                                    bookmarkContext = lines.join('\n');
+                                    if (bookmarkContext.length > maxContextChars) {
+                                        bookmarkContext = bookmarkContext.substring(0, maxContextChars) + '\n...(更多书签已省略)';
+                                    }
                                 }
                             }
                         } catch (e) {
@@ -2240,7 +2273,7 @@ ${bookmarkContext ? `以下是用户保存的书签数据：\n${bookmarkContext}
 } satisfies ExportedHandler;
 
 // 获取客户端 IP 地址
-function getClientIp(request: Request, env: Env): string {
+function getClientIp(request: Request, _env: Env): string {
     // 优先使用 Cloudflare 提供的真实 IP
     const cfConnectingIp = request.headers.get('CF-Connecting-IP');
     if (cfConnectingIp) return cfConnectingIp;
@@ -2249,7 +2282,9 @@ function getClientIp(request: Request, env: Env): string {
     const forwardedFor = request.headers.get('X-Forwarded-For');
     if (forwardedFor) {
         const ips = forwardedFor.split(',');
-        return ips[0].trim();
+        if (ips.length > 0) {
+            return ips[0]!.trim();
+        }
     }
     
     // 最后使用 X-Real-IP
