@@ -2099,11 +2099,12 @@ export default {
                         // ===== 意图识别模块（使用大模型）=====
                         // 使用用户当前选择的模型进行意图识别
                         let shouldLoadBookmarks = false;
+                        let shouldSearchWeb = false;
                         let intentReason = '';
                         
                         try {
                             const intentModel = selectedModel;
-                            const intentPrompt = `你是一个意图识别助手。请分析用户的问题，判断是否需要查询用户的书签/收藏数据。
+                            const intentPrompt = `你是一个意图识别助手。请分析用户的问题，判断需要哪些数据源。
 
 用户问题："${body.message}"
 
@@ -2111,15 +2112,17 @@ export default {
 1. 用户是否在询问关于书签、收藏、网站、工具推荐等相关问题？
 2. 用户是否在寻找特定的网站或工具？
 3. 用户是否想了解"我有什么"、"我保存了"什么？
-4. 还是这是一个纯粹的知识问答、闲聊、翻译、计算等问题？
+4. 用户是否询问实时信息、新闻、天气、当前事件等需要网络搜索的问题？
+5. 还是这是一个纯粹的知识问答、闲聊、翻译、计算等问题？
 
 注意：
-- 如果用户问"什么是React"、"怎么学习Python"等知识性问题，不需要书签
-- 如果用户问"我有什么前端工具"、"推荐一些开发网站"、"我的书签里有Python相关的吗"，需要书签
-- 如果用户问"你好"、"谢谢"、"翻译"、"计算"等，不需要书签
+- 如果用户问"什么是React"、"怎么学习Python"等知识性问题，不需要书签，不需要搜索
+- 如果用户问"我有什么前端工具"、"推荐一些开发网站"、"我的书签里有Python相关的吗"，需要书签，不需要搜索
+- 如果用户问"今天的天气"、"最新新闻"、"当前时间"、"某人的最新动态"，不需要书签，需要搜索
+- 如果用户问"你好"、"谢谢"、"翻译"、"计算"等，不需要书签，不需要搜索
 
 请只回复一个JSON对象，格式如下：
-{"needBookmarks": true/false, "reason": "简要说明原因"}`;
+{"needBookmarks": true/false, "needSearch": true/false, "reason": "简要说明原因"}`;
 
                             const intentMessages = [
                                 { role: 'system' as const, content: '你是意图识别助手，只输出JSON格式的判断结果。' },
@@ -2136,20 +2139,23 @@ export default {
                                 if (jsonMatch) {
                                     const intentResult = JSON.parse(jsonMatch[0]);
                                     shouldLoadBookmarks = intentResult.needBookmarks === true;
+                                    shouldSearchWeb = intentResult.needSearch === true;
                                     intentReason = intentResult.reason || '';
                                 } else {
                                     // 回退：检查关键词
-                                    shouldLoadBookmarks = intentResponse.toLowerCase().includes('true') || 
-                                                         intentResponse.includes('需要');
+                                    const response = intentResponse.toLowerCase();
+                                    shouldLoadBookmarks = response.includes('bookmarks": true') || response.includes('书签');
+                                    shouldSearchWeb = response.includes('search": true') || response.includes('搜索');
                                 }
                             } catch (parseError) {
                                 console.warn('[AI Chat] 意图识别结果解析失败，使用回退策略:', parseError);
                                 // 回退到简单关键词匹配
                                 const msg = body.message.toLowerCase();
-                                shouldLoadBookmarks = ['书签', '收藏', '我的', '推荐', '找', '搜索', '有没有', '哪些'].some(kw => msg.includes(kw));
+                                shouldLoadBookmarks = ['书签', '收藏', '我的', '推荐', '找', '有没有', '哪些'].some(kw => msg.includes(kw));
+                                shouldSearchWeb = ['天气', '新闻', '今天', '现在', '最新', '当前'].some(kw => msg.includes(kw));
                             }
                             
-                            console.log(`[AI Chat] 意图识别结果: 需要书签=${shouldLoadBookmarks}, 原因=${intentReason}`);
+                            console.log(`[AI Chat] 意图识别结果: 需要书签=${shouldLoadBookmarks}, 需要搜索=${shouldSearchWeb}, 原因=${intentReason}`);
                         } catch (intentError) {
                             console.error('[AI Chat] 意图识别失败，默认加载书签:', intentError);
                             // 意图识别失败时，默认加载书签以确保不遗漏
@@ -2232,6 +2238,76 @@ export default {
                             console.log(`[AI Chat] 意图识别判断不需要书签，直接回答用户问题`);
                         }
 
+                        // 网络搜索功能
+                        let searchResults = '';
+                        if (shouldSearchWeb) {
+                            try {
+                                console.log(`[AI Chat] 需要进行网络搜索...`);
+                                // 使用 Google Custom Search API 或 SerpAPI 进行搜索
+                                // 这里使用一个简单的实现示例
+                                const searchQuery = encodeURIComponent(body.message);
+                                
+                                // 优先尝试使用 SerpAPI (如果有配置)
+                                if (env.SERP_API_KEY) {
+                                    const serpResponse = await fetch(
+                                        `https://serpapi.com/search?q=${searchQuery}&engine=google&api_key=${env.SERP_API_KEY}&num=5`,
+                                        { method: 'GET' }
+                                    );
+                                    if (serpResponse.ok) {
+                                        const serpData = await serpResponse.json() as any;
+                                        if (serpData.organic_results) {
+                                            searchResults = serpData.organic_results
+                                                .slice(0, 5)
+                                                .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
+                                                .join('\n\n');
+                                        }
+                                    }
+                                } 
+                                // 备用：使用 Google Custom Search API
+                                else if (env.GOOGLE_SEARCH_API_KEY && env.GOOGLE_SEARCH_ENGINE_ID) {
+                                    const googleResponse = await fetch(
+                                        `https://www.googleapis.com/customsearch/v1?q=${searchQuery}&key=${env.GOOGLE_SEARCH_API_KEY}&cx=${env.GOOGLE_SEARCH_ENGINE_ID}&num=5`,
+                                        { method: 'GET' }
+                                    );
+                                    if (googleResponse.ok) {
+                                        const googleData = await googleResponse.json() as any;
+                                        if (googleData.items) {
+                                            searchResults = googleData.items
+                                                .slice(0, 5)
+                                                .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
+                                                .join('\n\n');
+                                        }
+                                    }
+                                }
+                                // 备用：使用 SerpAPI 百度搜索（支持中文搜索更友好）
+                                else if (env.SERP_API_KEY && env.PREFERRED_SEARCH_ENGINE === 'baidu') {
+                                    const baiduResponse = await fetch(
+                                        `https://serpapi.com/search?q=${searchQuery}&engine=baidu&api_key=${env.SERP_API_KEY}&num=5`,
+                                        { method: 'GET' }
+                                    );
+                                    if (baiduResponse.ok) {
+                                        const baiduData = await baiduResponse.json() as any;
+                                        if (baiduData.organic_results) {
+                                            searchResults = baiduData.organic_results
+                                                .slice(0, 5)
+                                                .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
+                                                .join('\n\n');
+                                        }
+                                    }
+                                }
+                                // 如果都没有配置，使用 AI 模型直接回答
+                                else {
+                                    console.log('[AI Chat] 未配置搜索 API，使用模型知识回答');
+                                }
+                                
+                                if (searchResults) {
+                                    console.log(`[AI Chat] 搜索完成，获取到结果`);
+                                }
+                            } catch (searchError) {
+                                console.error('[AI Chat] 网络搜索失败:', searchError);
+                            }
+                        }
+
                         // 辅助函数：将书签格式化为文本
                         const formatBookmarks = (bookmarks: typeof allBookmarks): string => {
                             return bookmarks.map(b => `${b.gName}|${b.name}|${b.url}${b.description ? '|' + b.description : ''}`).join('\n');
@@ -2256,28 +2332,27 @@ export default {
                                 const bookmarkContext = totalBookmarks > 0 ? formatBookmarks(allBookmarks) : '';
                                 let systemPrompt: string;
                                 
+                                // 构建系统提示词的各个部分
+                                let promptParts: string[] = [];
+                                promptParts.push(`你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。`);
+                                promptParts.push(`请用简洁友好的中文回复。`);
+
                                 if (bookmarkContext) {
-                                    // 有书签数据
-                                    systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
-请用简洁友好的中文回复。
-
-以下是用户保存的书签数据，格式为"分组名|站点名|URL|描述"：
-${bookmarkContext}
-
-当用户询问与书签相关的问题时，请参考以上数据进行回答。`;
+                                    promptParts.push(`以下是用户保存的书签数据，格式为"分组名|站点名|URL|描述"：`);
+                                    promptParts.push(bookmarkContext);
+                                    promptParts.push(`当用户询问与书签相关的问题时，请参考以上数据进行回答。`);
                                 } else if (shouldLoadBookmarks) {
-                                    // 意图识别需要书签，但用户没有书签
-                                    systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
-请用简洁友好的中文回复。
-
-用户暂无保存的书签数据。当用户询问与书签相关的问题时，请友好地告知用户还没有添加任何书签。`;
-                                } else {
-                                    // 意图识别判断不需要书签，直接回答
-                                    systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
-请用简洁友好的中文回复。
-
-请直接回答用户的问题，无需查询书签数据。`;
+                                    promptParts.push(`用户暂无保存的书签数据。当用户询问与书签相关的问题时，请友好地告知用户还没有添加任何书签。`);
                                 }
+
+                                // 添加搜索结果
+                                if (searchResults) {
+                                    promptParts.push(`以下是从网络搜索到的相关信息：`);
+                                    promptParts.push(searchResults);
+                                    promptParts.push(`请根据以上搜索结果回答用户的问题，并在回答中引用信息来源。`);
+                                }
+
+                                systemPrompt = promptParts.join('\n\n');
 
                                 const messages = [
                                     { role: 'system' as const, content: systemPrompt },
@@ -2360,19 +2435,30 @@ ${bookmarkContext}
 
                             // 合并所有批次的分析结果
                             console.log(`[AI Chat] 合并 ${batchCount} 批分析结果...`);
-                            const mergePrompt = `你是 NavTools 智能导航助手。请综合以下各批次的分析结果，给用户一个完整、简洁的最终回答。
+                            let mergePromptParts: string[] = [];
+                            mergePromptParts.push(`你是 NavTools 智能导航助手。请综合以下各批次的分析结果，给用户一个完整、简洁的最终回答。`);
+                            mergePromptParts.push(`用户原始问题：${body.message}`);
+                            mergePromptParts.push(`各批次分析结果：`);
+                            mergePromptParts.push(batchResults.join('\n\n'));
 
-用户原始问题：${body.message}
+                            // 添加搜索结果
+                            if (searchResults) {
+                                mergePromptParts.push(`网络搜索结果：`);
+                                mergePromptParts.push(searchResults);
+                            }
 
-各批次分析结果：
-${batchResults.join('\n\n')}
+                            mergePromptParts.push(`请综合以上信息，给出最终回答：`);
+                            mergePromptParts.push(`1. 总结相关的书签（按相关性排序）`);
+                            mergePromptParts.push(`2. 给出简洁的推荐理由`);
+                            if (searchResults) {
+                                mergePromptParts.push(`3. 如果搜索结果有帮助，请结合搜索结果回答`);
+                                mergePromptParts.push(`4. 如果用户问的是一般性问题而非书签相关，请直接回答`);
+                            } else {
+                                mergePromptParts.push(`3. 如果用户问的是一般性问题而非书签相关，请直接回答`);
+                            }
+                            mergePromptParts.push(`请用中文回复，保持简洁友好。`);
 
-请综合以上信息，给出最终回答：
-1. 总结相关的书签（按相关性排序）
-2. 给出简洁的推荐理由
-3. 如果用户问的是一般性问题而非书签相关，请直接回答
-
-请用中文回复，保持简洁友好。`;
+                            const mergePrompt = mergePromptParts.join('\n\n');
 
                             const finalMessages = [
                                 { role: 'system' as const, content: '你是 NavTools 智能导航助手，请综合各批次分析结果给出最终回答。' },
@@ -2471,6 +2557,11 @@ interface Env {
     EMAIL_FROM?: string;
     AI_BASE_URL?: string;
     AI_API_KEY?: string;
+    // 搜索API配置
+    SERP_API_KEY?: string;
+    GOOGLE_SEARCH_API_KEY?: string;
+    GOOGLE_SEARCH_ENGINE_ID?: string;
+    PREFERRED_SEARCH_ENGINE?: string; // 'google' 或 'baidu'
 }
 
 // 验证用接口
