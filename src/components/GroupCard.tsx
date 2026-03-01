@@ -376,7 +376,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
                       onDelete={onDelete}
                       onSiteClick={onSiteClick}
                       onSettingsOpen={onSettingsOpen}
-                      isEditMode={true}
+                      isEditMode={viewMode === 'edit'}
                       viewMode={viewMode}
                       iconApi={configs?.['site.iconApi']}
                       isBatchMode={isBatchMode}
@@ -422,7 +422,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
               onDelete={onDelete}
               onSiteClick={onSiteClick}
               onSettingsOpen={onSettingsOpen}
-              isEditMode={true}
+              isEditMode={viewMode === 'edit'}
               viewMode={viewMode}
               iconApi={configs?.['site.iconApi']}
               isBatchMode={isBatchMode}

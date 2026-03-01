@@ -82,17 +82,17 @@ const SiteCard = memo(function SiteCard({
     setIsInView(false);
   }, [site.icon]);
 
-  // 使用dnd-kit的useSortable hook - 始终启用拖拽（除批量模式外）
+  // 使用dnd-kit的useSortable hook - 仅在编辑模式下启用拖拽
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `site-${site.id}`, // 使用稳定的 id
-    disabled: isBatchMode, // 仅批量模式下禁用拖拽
+    disabled: !isEditMode || isBatchMode, // 非编辑模式或批量模式下禁用拖拽
   });
 
   const style = {
     transform: CSS.Translate.toString(transform),
     transition: isDragging ? 'none' : transition, // 拖动时禁用 transition 以提高响应速度
     zIndex: isDragging ? 9999 : 'auto',
-    opacity: isDragging ? 0.3 : 1, // 降低原位透明度
+    opacity: isDragging ? 0.5 : 1, // 降低原位透明度
     position: 'relative' as const,
     willChange: isEditMode ? 'transform' : 'auto', // 编辑模式下开启硬件加速提示
   };
@@ -121,7 +121,12 @@ const SiteCard = memo(function SiteCard({
       if (site.id && onSiteClick) {
         onSiteClick(site.id);
       }
-      window.open(site.url, '_blank');
+      // 确保 URL 有 http:// 或 https:// 前缀
+      let url = site.url.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -177,15 +182,16 @@ const SiteCard = memo(function SiteCard({
         }}
       >
         {isEditMode ? (
-          <Box
-            onClick={isBatchMode ? handleCardClick : undefined}
+          <CardActionArea
+            onClick={handleCardClick}
             sx={{
               height: '100%',
               p: { xs: 1.5, sm: 2 },
               pt: { xs: 2.5, sm: 3 }, // 为复选框留出顶部空间
-              cursor: isBatchMode ? 'pointer' : 'grab',
               display: 'flex',
               flexDirection: 'column',
+              alignItems: 'stretch',
+              justifyContent: 'flex-start',
               position: 'relative',
             }}
           >
@@ -213,7 +219,7 @@ const SiteCard = memo(function SiteCard({
                 }}
               />
             )}
-            <Box position='absolute' top={8} right={8} display='flex' gap={1}>
+            <Box position='absolute' top={8} right={8} display='flex' gap={1} zIndex={10}>
               <IconButton
                 size='small'
                 className="site-settings-btn"
@@ -226,6 +232,8 @@ const SiteCard = memo(function SiteCard({
                 sx={{
                   display: 'none',
                   p: 0.5,
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.7)',
                   '&:hover': {
                     backgroundColor: 'action.hover',
                   },
@@ -576,15 +584,81 @@ const SiteCard = memo(function SiteCard({
     </Box >
   );
 
+  // 编辑模式下：卡片可点击跳转，同时有拖拽手柄用于排序
   if (isEditMode) {
     return (
-      <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-        {cardContent}
+      <div ref={setNodeRef} style={style} {...attributes}>
+        <Box 
+          sx={{ 
+            position: 'relative', 
+            height: '100%',
+            '&:hover .drag-handle': {
+              opacity: 1,
+              visibility: 'visible',
+            },
+          }}
+        >
+          {/* 拖拽手柄 - 只有按住这里才能拖拽，默认隐藏，悬停显示 */}
+          <Box
+            {...listeners}
+            className="drag-handle"
+            sx={{
+              position: 'absolute',
+              top: 8,
+              left: isBatchMode ? 44 : 12, // 批量模式时避开复选框
+              zIndex: 25,
+              width: 24,
+              height: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'grab',
+              borderRadius: '6px',
+              opacity: 0,
+              visibility: 'hidden',
+              transition: 'all 0.2s ease',
+              backgroundColor: (theme) =>
+                theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.9)',
+              boxShadow: (theme) =>
+                theme.palette.mode === 'dark' 
+                  ? '0 2px 8px rgba(0,0,0,0.4)' 
+                  : '0 2px 8px rgba(0,0,0,0.1)',
+              border: (theme) =>
+                `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+              '&:hover': {
+                backgroundColor: (theme) =>
+                  theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,1)',
+                transform: 'scale(1.1)',
+              },
+              '&:active': {
+                cursor: 'grabbing',
+                transform: 'scale(0.95)',
+              },
+            }}
+            title="按住拖拽排序"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.6 }}>
+              <circle cx="4" cy="4" r="1.5" />
+              <circle cx="4" cy="8" r="1.5" />
+              <circle cx="4" cy="12" r="1.5" />
+              <circle cx="12" cy="4" r="1.5" />
+              <circle cx="12" cy="8" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+            </svg>
+          </Box>
+          {/* 卡片内容 */}
+          {cardContent}
+        </Box>
       </div>
     );
   }
 
-  return cardContent;
+  // 非编辑模式下：直接返回可点击的卡片
+  return (
+    <Box onClick={handleCardClick} sx={{ cursor: 'pointer', height: '100%' }}>
+      {cardContent}
+    </Box>
+  );
 });
 
 export default SiteCard;
