@@ -1178,6 +1178,11 @@ export default {
                             }
                         }
 
+                        // 强制逻辑：精选内容必须是公开的
+                        if (data.is_featured === 1) {
+                            data.is_public = 1;
+                        }
+
                         const result = await api.updateSite(id, data);
                         return createJsonResponse(result, request);
                     } else if (path.startsWith("sites/") && path.endsWith("/click") && method === "POST") {
@@ -1808,6 +1813,11 @@ export default {
                             if (!data.ids || !Array.isArray(data.ids)) {
                                 return createJsonResponse({ success: false, message: "参数 ids 必须是数组" }, request, { status: 400 });
                             }
+                            // 强制逻辑：精选内容必须是公开的
+                            if (data.data.is_featured === 1) {
+                                data.data.is_public = 1;
+                            }
+
                             const result = await api.batchUpdateSites(data.ids, data.data);
                             return createJsonResponse(result, request);
                         } catch (error) {
@@ -1940,7 +1950,9 @@ export default {
                         // 1. 检查用户是否已认证
                         if (!isAuthenticated || !currentUserId) {
                             // 访客模式：基于 IP 限制使用次数
-                            const GUEST_LIMIT = 10; // 每个访客最多使用 10 次
+                            // 从配置读取访客限制次数，默认 10 次
+                            const guestLimitConfig = await api.getConfig("ai_guest_limit", 1);
+                            const GUEST_LIMIT = guestLimitConfig ? parseInt(guestLimitConfig, 10) : 10;
                             const guestKey = `ai_guest_usage:${clientIp}`;
                             
                             try {
@@ -2085,8 +2097,8 @@ export default {
                                     }
                                 }
                             } else {
-                                // 访客模式：只查询精选的公开内容
-                                // 条件：sites.is_featured = 1, sites.is_public = 1, groups.is_public = 1, 且未删除
+                                // 访客模式：只查询精选内容（精选必然是公开的）
+                                // 条件：sites.is_featured = 1, groups.is_public = 1, 且未删除
                                 const groups = await env.DB.prepare(
                                     'SELECT id, name FROM groups WHERE is_public = 1 AND is_deleted = 0 ORDER BY order_num'
                                 ).all();
@@ -2095,7 +2107,7 @@ export default {
                                     `SELECT s.name, s.url, s.description, s.group_id 
                                  FROM sites s 
                                  JOIN groups g ON s.group_id = g.id 
-                                 WHERE s.is_featured = 1 AND s.is_public = 1 AND g.is_public = 1 
+                                 WHERE s.is_featured = 1 AND g.is_public = 1 
                                  AND s.is_deleted = 0 AND g.is_deleted = 0
                                  ORDER BY s.order_num 
                                  LIMIT ${maxSites}`
@@ -2333,6 +2345,7 @@ interface SiteInput {
     notes?: string;
     order_num?: number;
     is_public?: number;
+    is_featured?: number;
 }
 
 interface ConfigInput {
@@ -2517,6 +2530,17 @@ function validateSite(data: SiteInput): {
         sanitizedData.order_num = data.order_num;
     }
 
+    // 验证 is_featured (可选，默认为 0 - 非精选)
+    if (data.is_featured !== undefined) {
+        if (typeof data.is_featured === "number" && (data.is_featured === 0 || data.is_featured === 1)) {
+            sanitizedData.is_featured = data.is_featured;
+        } else {
+            errors.push("is_featured 必须是 0 (非精选) 或 1 (精选)");
+        }
+    } else {
+        sanitizedData.is_featured = 0; // 默认非精选
+    }
+
     // 验证 is_public (可选，默认为 1 - 公开)
     if (data.is_public !== undefined) {
         if (typeof data.is_public === "number" && (data.is_public === 0 || data.is_public === 1)) {
@@ -2526,6 +2550,11 @@ function validateSite(data: SiteInput): {
         }
     } else {
         sanitizedData.is_public = 1; // 默认公开
+    }
+
+    // 强制逻辑：精选内容必须是公开的
+    if (sanitizedData.is_featured === 1) {
+        sanitizedData.is_public = 1;
     }
 
     return {
