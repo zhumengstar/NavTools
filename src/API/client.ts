@@ -483,7 +483,14 @@ export class NavigationClient {
       });
 
       if (!response.ok) {
-        throw new Error('AI 服务暂不可用');
+        let errorMessage = 'AI 服务暂不可用';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // 如果无法解析 JSON，使用默认消息
+        }
+        throw new Error(errorMessage);
       }
 
       if (!response.body) return;

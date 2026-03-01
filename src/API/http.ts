@@ -176,6 +176,7 @@ export interface UserListItem {
   login_count: number;
   group_count: number;
   site_count: number;
+  ai_usage_count: number; // AI 使用次数
 }
 
 // API 类
@@ -532,8 +533,10 @@ export class NavigationAPI {
         (SELECT COUNT(*) FROM groups WHERE user_id = u.id AND (is_deleted = 0 OR is_deleted IS NULL)) as group_count,
         (SELECT COUNT(*) FROM sites s
          JOIN groups g ON s.group_id = g.id
-         WHERE g.user_id = u.id AND (s.is_deleted = 0 OR s.is_deleted IS NULL)) as site_count
+         WHERE g.user_id = u.id AND (s.is_deleted = 0 OR s.is_deleted IS NULL)) as site_count,
+        COALESCE(q.usage_count, 0) as ai_usage_count
       FROM users u
+      LEFT JOIN user_quotas q ON u.id = q.user_id
       ORDER BY u.id ASC
     `;
 
@@ -552,7 +555,7 @@ export class NavigationAPI {
       console.error('[Admin] SQL stats failed, falling back to basic:', e);
       // 极致降级：只获取基础信息
       const base = await this.db.prepare('SELECT id, username, email, role, avatar_url, created_at, COALESCE(login_count, 0) as login_count FROM users ORDER BY id ASC').all<any>();
-      return (base.results || []).map(u => ({ ...u, group_count: 0, site_count: 0 }));
+      return (base.results || []).map(u => ({ ...u, group_count: 0, site_count: 0, ai_usage_count: 0 }));
     }
   }
 

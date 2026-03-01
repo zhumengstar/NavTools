@@ -106,6 +106,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                             <TableCell>ID</TableCell>
                             <TableCell>角色</TableCell>
                             <TableCell>统计</TableCell>
+                            <TableCell>AI使用次数</TableCell>
                             <TableCell>登录次数</TableCell>
                             <TableCell>最后登录</TableCell>
                             <TableCell>注册时间</TableCell>
@@ -157,6 +158,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ api }) => {
                                             书签: <b>{user.site_count}</b>
                                         </Typography>
                                     </Box>
+                                </TableCell>
+                                <TableCell>
+                                    <Chip 
+                                        label={user.ai_usage_count || 0} 
+                                        size="small" 
+                                        color={user.ai_usage_count > 0 ? 'secondary' : 'default'}
+                                        variant="outlined"
+                                    />
                                 </TableCell>
                                 <TableCell>
                                     <Chip 

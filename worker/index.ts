@@ -1919,33 +1919,85 @@ export default {
 
                     // AI 智能问答路由
                     if (path === "chat" && method === "POST") {
+                        console.log('[AI Chat] 开始处理请求, 用户状态:', { currentUserId, isAuthenticated });
+
                         const body = (await validateRequestBody(request)) as {
                             message: string;
                             history?: { role: string; content: string }[];
                             model?: string;
                         };
 
+                        console.log('[AI Chat] 请求体:', { message: body.message?.substring(0, 50), model: body.model });
+
+                        // 获取客户端 IP 地址
+                        const clientIp = getClientIp(request, env);
+                        console.log('[AI Chat] 客户端 IP:', clientIp);
+
                         // 模型配置 - 切换模型时只需修改这里
                         const selectedModel = body.model || 'gemini-3.1-pro-high';
 
                         // --- 额度查验与重置系统 ---
-                        // 如果未启用认证且由访客访问，我们默认根据 IP 或 ID=1 进行限制 (此处按 ID=1 处理)
-                        const userIdForQuota = currentUserId || 1;
-                        const quotaCheck = await api.checkAndResetQuota(userIdForQuota);
-
-                        if (!quotaCheck.allowed) {
-                            return createJsonResponse(
-                                {
-                                    success: false,
-                                    message: '您今日的 AI 咨询额度已用完，请明天再来。☕'
-                                },
-                                request,
-                                { status: 429 }
-                            );
+                        // 1. 检查用户是否已认证
+                        if (!isAuthenticated || !currentUserId) {
+                            // 访客模式：基于 IP 限制使用次数
+                            const GUEST_LIMIT = 10; // 每个访客最多使用 10 次
+                            const guestKey = `ai_guest_usage:${clientIp}`;
+                            
+                            try {
+                                // 获取当前访客的使用次数
+                                const usageStr = await env.KV.get(guestKey);
+                                const usageCount = usageStr ? parseInt(usageStr, 10) : 0;
+                                
+                                console.log('[AI Chat] 访客使用次数:', { clientIp, usageCount, limit: GUEST_LIMIT });
+                                
+                                if (usageCount >= GUEST_LIMIT) {
+                                    return createJsonResponse(
+                                        {
+                                            success: false,
+                                            message: `您今日 AI 问答次数已达上限（${GUEST_LIMIT}次）。请登录后继续使用，或明天再来。`
+                                        },
+                                        request,
+                                        { status: 429 }
+                                    );
+                                }
+                                
+                                // 增加使用计数，设置过期时间为当天结束（UTC+8）
+                                const now = new Date();
+                                const offset = 8 * 60; // UTC+8
+                                const beijingTime = new Date(now.getTime() + (now.getTimezoneOffset() + offset) * 60000);
+                                const tomorrow = new Date(beijingTime);
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                tomorrow.setHours(0, 0, 0, 0);
+                                const ttl = Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
+                                
+                                await env.KV.put(guestKey, (usageCount + 1).toString(), { expirationTtl: ttl });
+                                
+                                // 记录访客使用次数（用于管理界面显示）
+                                // 注意：这里我们只记录，不显示在用户管理中，因为访客不是注册用户
+                                
+                            } catch (kvError) {
+                                console.error('[AI Chat] KV 操作失败:', kvError);
+                                // KV 失败时允许继续使用，但记录错误
+                            }
+                        } else {
+                            // 已登录用户：使用原有的用户配额系统
+                            const userIdForQuota = currentUserId;
+                            const quotaCheck = await api.checkAndResetQuota(userIdForQuota);
+                            if (!quotaCheck.allowed) {
+                                return createJsonResponse(
+                                    {
+                                        success: false,
+                                        message: '您今日的 AI 咨询额度已用完，请明天再来。☕'
+                                    },
+                                    request,
+                                    { status: 429 }
+                                );
+                            }
+                            await api.incrementQuota(userIdForQuota);
+                            
+                            // 更新用户管理界面显示的 AI 使用次数
+                            // 注意：这里只是增加计数，实际的 AI 调用在下面进行
                         }
-
-                        // 执行计数增加
-                        await api.incrementQuota(userIdForQuota);
 
                         // 辅助函数：根据模型ID获取上下文窗口大小（估算值）
                         const getContextWindow = (modelId: string): number => {
@@ -2078,13 +2130,21 @@ ${bookmarkContext ? `以下是用户保存的书签数据：\n${bookmarkContext}
                                 });
                             } else {
                                 // External AI Provider (OpenAI Compatible)
+                                console.log('[AI Chat] 使用外部 AI 服务');
                                 if (!env.AI_BASE_URL || !env.AI_API_KEY) {
+                                    console.error('[AI Chat] 外部 AI 服务未配置');
                                     return createJsonResponse(
                                         { success: false, message: '外部 AI 服务未配置，请检查 wrangler.jsonc' },
                                         request,
                                         { status: 503 }
                                     );
                                 }
+
+                                console.log('[AI Chat] 外部 AI 配置:', {
+                                    baseUrl: env.AI_BASE_URL,
+                                    hasApiKey: !!env.AI_API_KEY,
+                                    model: selectedModel
+                                });
 
                                 const payload = {
                                     model: selectedModel,
@@ -2120,10 +2180,15 @@ ${bookmarkContext ? `以下是用户保存的书签数据：\n${bookmarkContext}
                                 });
                                 clearTimeout(chatTimeoutId);
 
+                                console.log('[AI Chat] 外部 AI 响应状态:', chatResponse.status);
+
                                 if (!chatResponse.ok) {
                                     const errorText = await chatResponse.text();
+                                    console.error('[AI Chat] 外部 AI 错误:', chatResponse.status, errorText);
                                     throw new Error(`External API Error: ${chatResponse.status} ${errorText}`);
                                 }
+
+                                console.log('[AI Chat] 成功获取 AI 响应流');
 
                                 const allowedOrigin = request.headers.get("Origin") || "*";
                                 return new Response(chatResponse.body, {
@@ -2173,6 +2238,27 @@ ${bookmarkContext ? `以下是用户保存的书签数据：\n${bookmarkContext}
         }
     },
 } satisfies ExportedHandler;
+
+// 获取客户端 IP 地址
+function getClientIp(request: Request, env: Env): string {
+    // 优先使用 Cloudflare 提供的真实 IP
+    const cfConnectingIp = request.headers.get('CF-Connecting-IP');
+    if (cfConnectingIp) return cfConnectingIp;
+    
+    // 其次使用 X-Forwarded-For
+    const forwardedFor = request.headers.get('X-Forwarded-For');
+    if (forwardedFor) {
+        const ips = forwardedFor.split(',');
+        return ips[0].trim();
+    }
+    
+    // 最后使用 X-Real-IP
+    const realIp = request.headers.get('X-Real-IP');
+    if (realIp) return realIp;
+    
+    // 默认返回 unknown
+    return 'unknown';
+}
 
 // 环境变量接口
 interface Env {
