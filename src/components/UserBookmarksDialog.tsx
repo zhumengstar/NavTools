@@ -174,6 +174,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                                             sx={{
                                                                 position: 'relative',
                                                                 opacity: site.is_deleted ? 0.7 : 1,
+                                                                minWidth: 0, // 确保文字省略正常工作
                                                                 '&::before': site.is_deleted ? {
                                                                     content: '"已删除"',
                                                                     position: 'absolute',

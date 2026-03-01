@@ -124,6 +124,7 @@ const SiteCard = memo(function SiteCard({
       <Card
         className="site-card"
         sx={{
+          width: '100%', // 确保水平长度一致
           height: '100%',
           minHeight: { xs: 100, sm: 110 }, // 设置固定的最小高度
           position: 'relative', // 确保绝对定位子元素参考此处
@@ -243,7 +244,7 @@ const SiteCard = memo(function SiteCard({
                   }
                 }}
               >
-                <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em', minWidth: 0 }}>
                   <Typography
                     variant='subtitle2'
                     fontWeight='medium'
@@ -424,7 +425,7 @@ const SiteCard = memo(function SiteCard({
                       }
                     }}
                   >
-                    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '3.2em', minWidth: 0 }}>
                       <Typography
                         variant='subtitle2'
                         fontWeight='medium'
