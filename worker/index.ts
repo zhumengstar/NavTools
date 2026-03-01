@@ -2040,18 +2040,18 @@ export default {
                         };
 
                         // 根据上下文窗口动态计算书签限制
-                        // 预留更充足的空间给系统提示词和回复 (API Error 5021 suggest strict limits)
-                        // 上下文窗口通常包含 输入 + 输出。
-                        // 假设 1 token ≈ 1.5 chars (中文混合环境)，但为了安全我们按 1 token = 1 char 计算 (甚至更保守)
-                        // Input limit: 80% of total context.
-                        const maxInputTokens = Math.floor(AI_MODEL.contextWindow * 0.8);
-                        const maxContextChars = maxInputTokens * 2; // Token to Char estimation
+                        // 预留空间给系统提示词和回复
+                        // 假设 1 token ≈ 4 chars (中文环境更高效的估算)
+                        // Input limit: 90% of total context for more bookmarks
+                        const maxInputTokens = Math.floor(AI_MODEL.contextWindow * 0.9);
+                        const maxContextChars = maxInputTokens * 4; // Token to Char estimation (1 token ≈ 4 chars for Chinese)
 
-                        // 再次限制：对于 8k 模型 (8192)，80% 是 6553 tokens。
-                        // 之前的错误是 8618 tokens > 7968 limit. 
-                        // 说明之前的 13107 chars 确实产生了好几千 token。
+                        // 计算最大书签数量，每条书签平均约80-100字符（更紧凑的格式）
+                        // 对于大上下文模型（如Gemini 1M），可以传递数千条书签
+                        const calculatedMaxSites = Math.floor(maxContextChars / 80);
+                        const maxSites = Math.min(10000, Math.max(200, calculatedMaxSites)); // 最少200条，最多10000条
 
-                        const maxSites = Math.min(1000, Math.floor(maxContextChars / 150)); // 每条书签估算100-150字符
+                        console.log(`[AI Chat] 上下文窗口: ${AI_MODEL.contextWindow}, 最大书签数: ${maxSites}`);
 
                         if (!body.message || typeof body.message !== 'string') {
                             return createJsonResponse(
@@ -2087,14 +2087,27 @@ export default {
                                         groupMap.set(g.id, g.name);
                                     }
                                     const lines: string[] = [];
+                                    let currentLength = 0;
+                                    let includedCount = 0;
+                                    const maxChars = maxContextChars - 100; // 预留空间给提示词
+                                    
                                     for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
                                         const gName = groupMap.get(s.group_id) || '未分组';
-                                        lines.push(`[${gName}] ${s.name}: ${s.url}${s.description ? ' - ' + s.description : ''}`);
+                                        // 更紧凑的格式：分组名|站点名|URL|描述
+                                        const line = `${gName}|${s.name}|${s.url}${s.description ? '|' + s.description : ''}`;
+                                        
+                                        // 检查添加这条书签是否会超出限制
+                                        if (currentLength + line.length + 1 > maxChars) {
+                                            lines.push(`...(还有 ${sites.results.length - includedCount} 条书签未显示)`);
+                                            break;
+                                        }
+                                        
+                                        lines.push(line);
+                                        currentLength += line.length + 1;
+                                        includedCount++;
                                     }
                                     bookmarkContext = lines.join('\n');
-                                    if (bookmarkContext.length > maxContextChars) {
-                                        bookmarkContext = bookmarkContext.substring(0, maxContextChars) + '\n...(更多书签已省略)';
-                                    }
+                                    console.log(`[AI Chat] 已加载 ${includedCount}/${sites.results.length} 条书签到上下文`);
                                 }
                             } else {
                                 // 访客模式：只查询精选内容（精选必然是公开的）
@@ -2119,14 +2132,25 @@ export default {
                                         groupMap.set(g.id, g.name);
                                     }
                                     const lines: string[] = [];
+                                    let currentLength = 0;
+                                    let includedCount = 0;
+                                    const maxChars = maxContextChars - 100;
+                                    
                                     for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
                                         const gName = groupMap.get(s.group_id) || '未分组';
-                                        lines.push(`[${gName}] ${s.name}: ${s.url}${s.description ? ' - ' + s.description : ''}`);
+                                        const line = `${gName}|${s.name}|${s.url}${s.description ? '|' + s.description : ''}`;
+                                        
+                                        if (currentLength + line.length + 1 > maxChars) {
+                                            lines.push(`...(还有 ${sites.results.length - includedCount} 条书签未显示)`);
+                                            break;
+                                        }
+                                        
+                                        lines.push(line);
+                                        currentLength += line.length + 1;
+                                        includedCount++;
                                     }
                                     bookmarkContext = lines.join('\n');
-                                    if (bookmarkContext.length > maxContextChars) {
-                                        bookmarkContext = bookmarkContext.substring(0, maxContextChars) + '\n...(更多书签已省略)';
-                                    }
+                                    console.log(`[AI Chat] 访客模式已加载 ${includedCount}/${sites.results.length} 条精选书签`);
                                 }
                             }
                         } catch (e) {
@@ -2136,7 +2160,7 @@ export default {
                         const systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
 请用简洁友好的中文回复。
 
-${bookmarkContext ? `以下是用户保存的书签数据：\n${bookmarkContext}\n\n当用户询问与书签相关的问题时，请参考以上数据进行回答。` : '用户暂无保存的书签数据。'}`;
+${bookmarkContext ? `以下是用户保存的书签数据，格式为"分组名|站点名|URL|描述"：\n${bookmarkContext}\n\n当用户询问与书签相关的问题时，请参考以上数据进行回答。如果用户问"我有什么书签"或类似问题，请基于以上数据回答。` : '用户暂无保存的书签数据。'}`;
 
                         const messages = [
                             { role: 'system' as const, content: systemPrompt },
