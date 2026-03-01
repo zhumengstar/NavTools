@@ -1155,7 +1155,7 @@ function App() {
       ) || [];
       return total + activeSites.length;
     }, 0);
-  }, [groups, isInitialDataLoaded]);
+  }, [groups, isDataSynced]);
 
 
   const fetchData = useCallback(async (silent = false) => {
@@ -2760,7 +2760,7 @@ function App() {
             <ActiveLayout
               title={configs['site.name'] || ''}
               configs={configs}
-              bookmarkCount={isAuthenticated ? (totalBookmarkCount ?? undefined) : undefined}
+              bookmarkCount={isAuthenticated && totalBookmarkCount && totalBookmarkCount > 0 ? totalBookmarkCount : undefined}
               headerContent={
                 <Stack
                   direction='row'
