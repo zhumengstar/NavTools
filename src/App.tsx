@@ -166,7 +166,7 @@ const DEFAULT_CONFIGS = {
   'site.backgroundOpacity': '0.15', // 背景蒙版透明度
   'site.iconApi': 'https://www.faviconextractor.com/favicon/{domain}', // 默认使用的API接口
   'site.searchBoxEnabled': 'true', // 是否启用搜索框
-  'ui.style': 'modern', // UI风格: 'modern' | 'classic'
+  'ui.style': 'classic', // UI风格: 'modern' | 'classic' - 访客默认使用经典模式
   isAdmin: 'false',
 };
 
