@@ -18,6 +18,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { NavigationClient, MockNavigationClient } from '../API/client';
 import { Group } from '../API/http';
 import SiteCard from './SiteCard';
@@ -39,6 +40,7 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
     const [includeDeleted, setIncludeDeleted] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+    const [collapsedGroups, setCollapsedGroups] = useState<Record<number, boolean>>({});
 
     useEffect(() => {
         if (open && userId) {
@@ -110,6 +112,13 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
         }
     };
 
+    const toggleGroupCollapse = (groupId: number) => {
+        setCollapsedGroups(prev => ({
+            ...prev,
+            [groupId]: !prev[groupId]
+        }));
+    };
+
     return (
         <Dialog 
             open={open} 
@@ -171,7 +180,30 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                         {groups.map((group) => (
                             <Card key={group.id} variant="outlined">
                                 <CardContent sx={{ pb: 1 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                    {/* 分组标题栏 - 点击可折叠/展开 */}
+                                    <Box 
+                                        sx={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: 1, 
+                                            mb: collapsedGroups[group.id] ? 0 : 2,
+                                            cursor: 'pointer',
+                                            py: 0.5,
+                                            px: 1,
+                                            mx: -1,
+                                            borderRadius: 1,
+                                            '&:hover': {
+                                                backgroundColor: 'action.hover'
+                                            }
+                                        }}
+                                        onClick={() => toggleGroupCollapse(group.id)}
+                                    >
+                                        <ExpandMoreIcon 
+                                            sx={{ 
+                                                transform: collapsedGroups[group.id] ? 'rotate(-90deg)' : 'rotate(0deg)',
+                                                transition: 'transform 0.2s'
+                                            }}
+                                        />
                                         <Typography 
                                             variant="h6" 
                                             sx={{ 
@@ -199,7 +231,10 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                         <Tooltip title="编辑分组">
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleEditClick(group)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditClick(group);
+                                                }}
                                                 sx={{ ml: 1 }}
                                             >
                                                 <EditIcon fontSize="small" />
@@ -207,7 +242,8 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                         </Tooltip>
                                     </Box>
                                     
-                                    {(() => {
+                                    {/* 分组内容 - 可折叠 */}
+                                    {!collapsedGroups[group.id] && (() => {
                                         const visibleCount = visibleSiteCounts[group.id] || 40;
                                         const sitesToShow = group.sites?.slice(0, visibleCount) || [];
                                         const totalSites = group.sites?.length || 0;
