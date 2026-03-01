@@ -204,13 +204,12 @@ const UserBookmarksDialog: React.FC<UserBookmarksDialogProps> = ({ open, onClose
                                                 transition: 'transform 0.2s'
                                             }}
                                         />
-                                        <Typography 
-                                            variant="h6" 
-                                            sx={{ 
-                                                fontWeight: 'bold', 
+                                        <Typography
+                                            variant="h6"
+                                            sx={{
+                                                fontWeight: 'bold',
                                                 flexGrow: 1,
                                                 opacity: group.is_deleted ? 0.7 : 1,
-                                                textDecoration: group.is_deleted ? 'line-through' : 'none'
                                             }}
                                         >
                                             {group.name}
