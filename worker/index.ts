@@ -2061,215 +2061,350 @@ export default {
                             );
                         }
 
-                        // 查询用户书签数据作为上下文
-                        let bookmarkContext = '';
-                        try {
-                            if (isAuthenticated && currentUserId) {
-                                // 已登录用户：查询该用户的所有书签
-                                const userId = currentUserId;
-                                
-                                const groups = await env.DB.prepare(
-                                    'SELECT id, name FROM groups WHERE user_id = ? AND is_deleted = 0 ORDER BY order_num'
-                                ).bind(userId).all();
-
-                                const sites = await env.DB.prepare(
-                                    `SELECT s.name, s.url, s.description, s.group_id 
-                                 FROM sites s 
-                                 JOIN groups g ON s.group_id = g.id 
-                                 WHERE g.user_id = ? AND s.is_deleted = 0
-                                 ORDER BY s.order_num 
-                                 LIMIT ${maxSites}`
-                                ).bind(userId).all();
-
-                                if (groups.results && sites.results) {
-                                    const groupMap = new Map<number, string>();
-                                    for (const g of groups.results as { id: number; name: string }[]) {
-                                        groupMap.set(g.id, g.name);
-                                    }
-                                    const lines: string[] = [];
-                                    let currentLength = 0;
-                                    let includedCount = 0;
-                                    const maxChars = maxContextChars - 100; // 预留空间给提示词
-                                    
-                                    for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
-                                        const gName = groupMap.get(s.group_id) || '未分组';
-                                        // 更紧凑的格式：分组名|站点名|URL|描述
-                                        const line = `${gName}|${s.name}|${s.url}${s.description ? '|' + s.description : ''}`;
-                                        
-                                        // 检查添加这条书签是否会超出限制
-                                        if (currentLength + line.length + 1 > maxChars) {
-                                            lines.push(`...(还有 ${sites.results.length - includedCount} 条书签未显示)`);
-                                            break;
-                                        }
-                                        
-                                        lines.push(line);
-                                        currentLength += line.length + 1;
-                                        includedCount++;
-                                    }
-                                    bookmarkContext = lines.join('\n');
-                                    console.log(`[AI Chat] 已加载 ${includedCount}/${sites.results.length} 条书签到上下文`);
-                                }
-                            } else {
-                                // 访客模式：只查询精选内容（精选必然是公开的）
-                                // 条件：sites.is_featured = 1, groups.is_public = 1, 且未删除
-                                const groups = await env.DB.prepare(
-                                    'SELECT id, name FROM groups WHERE is_public = 1 AND is_deleted = 0 ORDER BY order_num'
-                                ).all();
-
-                                const sites = await env.DB.prepare(
-                                    `SELECT s.name, s.url, s.description, s.group_id 
-                                 FROM sites s 
-                                 JOIN groups g ON s.group_id = g.id 
-                                 WHERE s.is_featured = 1 AND g.is_public = 1 
-                                 AND s.is_deleted = 0 AND g.is_deleted = 0
-                                 ORDER BY s.order_num 
-                                 LIMIT ${maxSites}`
-                                ).all();
-
-                                if (groups.results && sites.results) {
-                                    const groupMap = new Map<number, string>();
-                                    for (const g of groups.results as { id: number; name: string }[]) {
-                                        groupMap.set(g.id, g.name);
-                                    }
-                                    const lines: string[] = [];
-                                    let currentLength = 0;
-                                    let includedCount = 0;
-                                    const maxChars = maxContextChars - 100;
-                                    
-                                    for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
-                                        const gName = groupMap.get(s.group_id) || '未分组';
-                                        const line = `${gName}|${s.name}|${s.url}${s.description ? '|' + s.description : ''}`;
-                                        
-                                        if (currentLength + line.length + 1 > maxChars) {
-                                            lines.push(`...(还有 ${sites.results.length - includedCount} 条书签未显示)`);
-                                            break;
-                                        }
-                                        
-                                        lines.push(line);
-                                        currentLength += line.length + 1;
-                                        includedCount++;
-                                    }
-                                    bookmarkContext = lines.join('\n');
-                                    console.log(`[AI Chat] 访客模式已加载 ${includedCount}/${sites.results.length} 条精选书签`);
-                                }
-                            }
-                        } catch (e) {
-                            console.error('查询书签上下文失败:', e);
-                        }
-
-                        const systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
-请用简洁友好的中文回复。
-
-${bookmarkContext ? `以下是用户保存的书签数据，格式为"分组名|站点名|URL|描述"：\n${bookmarkContext}\n\n当用户询问与书签相关的问题时，请参考以上数据进行回答。如果用户问"我有什么书签"或类似问题，请基于以上数据回答。` : '用户暂无保存的书签数据。'}`;
-
-                        const messages = [
-                            { role: 'system' as const, content: systemPrompt },
-                            ...(body.history || []).slice(-10).map(m => ({
-                                role: m.role as 'user' | 'assistant',
-                                content: m.content,
-                            })),
-                            { role: 'user' as const, content: body.message },
-                        ];
-
-                        try {
-                            // Check if it's a Cloudflare model
-                            if (selectedModel.startsWith('@cf/')) {
+                        // 辅助函数：调用 AI (非流式) - 定义在前面供意图识别使用
+                        const callAI = async (messages: any[], useModel?: string): Promise<string> => {
+                            const modelToUse = useModel || selectedModel;
+                            if (modelToUse.startsWith('@cf/')) {
                                 if (!env.AI) {
-                                    return createJsonResponse(
-                                        { success: false, message: 'AI 服务未配置，请检查 wrangler.jsonc 中的 ai 绑定' },
-                                        request,
-                                        { status: 503 }
-                                    );
+                                    throw new Error('AI 服务未配置');
                                 }
-
-                                const aiResponse = await env.AI.run(
-                                    AI_MODEL.name,
-                                    { messages, stream: true }
-                                );
-
-                                const allowedOrigin = request.headers.get("Origin") || "*";
-                                return new Response(aiResponse as ReadableStream, {
-                                    headers: {
-                                        "content-type": "text/event-stream",
-                                        "Access-Control-Allow-Origin": allowedOrigin,
-                                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                                        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                                        "Access-Control-Allow-Credentials": "true",
-                                    },
-                                });
+                                const response = await env.AI.run(modelToUse, { messages, stream: false });
+                                // @ts-ignore
+                                return response.response || '';
                             } else {
-                                // External AI Provider (OpenAI Compatible)
-                                console.log('[AI Chat] 使用外部 AI 服务');
                                 if (!env.AI_BASE_URL || !env.AI_API_KEY) {
-                                    console.error('[AI Chat] 外部 AI 服务未配置');
-                                    return createJsonResponse(
-                                        { success: false, message: '外部 AI 服务未配置，请检查 wrangler.jsonc' },
-                                        request,
-                                        { status: 503 }
-                                    );
+                                    throw new Error('外部 AI 服务未配置');
                                 }
-
-                                console.log('[AI Chat] 外部 AI 配置:', {
-                                    baseUrl: env.AI_BASE_URL,
-                                    hasApiKey: !!env.AI_API_KEY,
-                                    model: selectedModel
-                                });
-
-                                const payload = {
-                                    model: selectedModel,
-                                    messages: messages,
-                                    stream: true
-                                };
-
-                                const controller = new AbortController();
-                                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-                                // Normalize Base URL: ensure it doesn't end with slash
                                 let baseUrl = env.AI_BASE_URL.replace(/\/$/, '');
                                 if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
                                     baseUrl = `${baseUrl}/v1`;
                                 }
-
-                                const chatUrl = `${baseUrl}/chat/completions`;
-                                console.log('[Worker Debug] Sending chat request to:', chatUrl);
-
-                                // 使用已经声明的 controller 和 timeoutId，但更新超时时间为 30s
-                                clearTimeout(timeoutId);
-                                const chatController = new AbortController();
-                                const chatTimeoutId = setTimeout(() => chatController.abort(), 30000); // 30s timeout for chat
-
-                                const chatResponse = await fetch(chatUrl, {
+                                const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
                                         'Authorization': `Bearer ${env.AI_API_KEY}`
                                     },
-                                    body: JSON.stringify(payload),
-                                    signal: chatController.signal
+                                    body: JSON.stringify({ model: modelToUse, messages, stream: false })
                                 });
-                                clearTimeout(chatTimeoutId);
-
-                                console.log('[AI Chat] 外部 AI 响应状态:', chatResponse.status);
-
                                 if (!chatResponse.ok) {
                                     const errorText = await chatResponse.text();
-                                    console.error('[AI Chat] 外部 AI 错误:', chatResponse.status, errorText);
                                     throw new Error(`External API Error: ${chatResponse.status} ${errorText}`);
                                 }
-
-                                console.log('[AI Chat] 成功获取 AI 响应流');
-
-                                const allowedOrigin = request.headers.get("Origin") || "*";
-                                return new Response(chatResponse.body, {
-                                    headers: {
-                                        "content-type": "text/event-stream",
-                                        "Access-Control-Allow-Origin": allowedOrigin,
-                                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                                        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                                        "Access-Control-Allow-Credentials": "true",
-                                    },
-                                });
+                                const result = await chatResponse.json();
+                                return result.choices?.[0]?.message?.content || '';
                             }
+                        };
+
+                        // ===== 意图识别模块（使用大模型）=====
+                        // 选择一个轻量级模型进行意图识别，降低成本
+                        const getIntentModel = (): string => {
+                            // 优先使用轻量级模型进行意图识别
+                            if (selectedModel.includes('gemini-2.5-flash')) return 'gemini-2.5-flash';
+                            if (selectedModel.includes('gemini') && selectedModel.includes('flash')) return selectedModel;
+                            if (selectedModel.includes('kimi')) return 'kimi-k2.5';
+                            // 默认使用用户选择的模型
+                            return selectedModel;
+                        };
+
+                        let shouldLoadBookmarks = false;
+                        let intentReason = '';
+                        
+                        try {
+                            const intentModel = getIntentModel();
+                            const intentPrompt = `你是一个意图识别助手。请分析用户的问题，判断是否需要查询用户的书签/收藏数据。
+
+用户问题："${body.message}"
+
+请判断：
+1. 用户是否在询问关于书签、收藏、网站、工具推荐等相关问题？
+2. 用户是否在寻找特定的网站或工具？
+3. 用户是否想了解"我有什么"、"我保存了"什么？
+4. 还是这是一个纯粹的知识问答、闲聊、翻译、计算等问题？
+
+注意：
+- 如果用户问"什么是React"、"怎么学习Python"等知识性问题，不需要书签
+- 如果用户问"我有什么前端工具"、"推荐一些开发网站"、"我的书签里有Python相关的吗"，需要书签
+- 如果用户问"你好"、"谢谢"、"翻译"、"计算"等，不需要书签
+
+请只回复一个JSON对象，格式如下：
+{"needBookmarks": true/false, "reason": "简要说明原因"}`;
+
+                            const intentMessages = [
+                                { role: 'system' as const, content: '你是意图识别助手，只输出JSON格式的判断结果。' },
+                                { role: 'user' as const, content: intentPrompt }
+                            ];
+
+                            console.log(`[AI Chat] 使用模型 ${intentModel} 进行意图识别...`);
+                            const intentResponse = await callAI(intentMessages, intentModel);
+                            
+                            // 解析意图识别结果
+                            try {
+                                // 尝试从响应中提取JSON
+                                const jsonMatch = intentResponse.match(/\{[\s\S]*\}/);
+                                if (jsonMatch) {
+                                    const intentResult = JSON.parse(jsonMatch[0]);
+                                    shouldLoadBookmarks = intentResult.needBookmarks === true;
+                                    intentReason = intentResult.reason || '';
+                                } else {
+                                    // 回退：检查关键词
+                                    shouldLoadBookmarks = intentResponse.toLowerCase().includes('true') || 
+                                                         intentResponse.includes('需要');
+                                }
+                            } catch (parseError) {
+                                console.warn('[AI Chat] 意图识别结果解析失败，使用回退策略:', parseError);
+                                // 回退到简单关键词匹配
+                                const msg = body.message.toLowerCase();
+                                shouldLoadBookmarks = ['书签', '收藏', '我的', '推荐', '找', '搜索', '有没有', '哪些'].some(kw => msg.includes(kw));
+                            }
+                            
+                            console.log(`[AI Chat] 意图识别结果: 需要书签=${shouldLoadBookmarks}, 原因=${intentReason}`);
+                        } catch (intentError) {
+                            console.error('[AI Chat] 意图识别失败，默认加载书签:', intentError);
+                            // 意图识别失败时，默认加载书签以确保不遗漏
+                            shouldLoadBookmarks = true;
+                        }
+
+                        // 查询用户书签数据作为上下文
+                        let allBookmarks: { gName: string; name: string; url: string; description: string }[] = [];
+                        
+                        if (shouldLoadBookmarks) {
+                            try {
+                                if (isAuthenticated && currentUserId) {
+                                    // 已登录用户：查询该用户的所有书签（无数量限制）
+                                    const userId = currentUserId;
+                                    
+                                    const groups = await env.DB.prepare(
+                                        'SELECT id, name FROM groups WHERE user_id = ? AND is_deleted = 0 ORDER BY order_num'
+                                    ).bind(userId).all();
+
+                                    const sites = await env.DB.prepare(
+                                        `SELECT s.name, s.url, s.description, s.group_id 
+                                     FROM sites s 
+                                     JOIN groups g ON s.group_id = g.id 
+                                     WHERE g.user_id = ? AND s.is_deleted = 0
+                                     ORDER BY s.order_num`
+                                    ).bind(userId).all();
+
+                                    if (groups.results && sites.results) {
+                                        const groupMap = new Map<number, string>();
+                                        for (const g of groups.results as { id: number; name: string }[]) {
+                                            groupMap.set(g.id, g.name);
+                                        }
+                                        
+                                        for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
+                                            allBookmarks.push({
+                                                gName: groupMap.get(s.group_id) || '未分组',
+                                                name: s.name,
+                                                url: s.url,
+                                                description: s.description || ''
+                                            });
+                                        }
+                                        console.log(`[AI Chat] 已加载 ${allBookmarks.length} 条书签`);
+                                    }
+                                } else {
+                                    // 访客模式：只查询精选内容
+                                    const groups = await env.DB.prepare(
+                                        'SELECT id, name FROM groups WHERE is_public = 1 AND is_deleted = 0 ORDER BY order_num'
+                                    ).all();
+
+                                    const sites = await env.DB.prepare(
+                                        `SELECT s.name, s.url, s.description, s.group_id 
+                                     FROM sites s 
+                                     JOIN groups g ON s.group_id = g.id 
+                                     WHERE s.is_featured = 1 AND g.is_public = 1 
+                                     AND s.is_deleted = 0 AND g.is_deleted = 0
+                                     ORDER BY s.order_num`
+                                    ).all();
+
+                                    if (groups.results && sites.results) {
+                                        const groupMap = new Map<number, string>();
+                                        for (const g of groups.results as { id: number; name: string }[]) {
+                                            groupMap.set(g.id, g.name);
+                                        }
+                                        
+                                        for (const s of sites.results as { name: string; url: string; description: string; group_id: number }[]) {
+                                            allBookmarks.push({
+                                                gName: groupMap.get(s.group_id) || '未分组',
+                                                name: s.name,
+                                                url: s.url,
+                                                description: s.description || ''
+                                            });
+                                        }
+                                        console.log(`[AI Chat] 访客模式已加载 ${allBookmarks.length} 条精选书签`);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('查询书签上下文失败:', e);
+                            }
+                        } else {
+                            console.log(`[AI Chat] 意图识别判断不需要书签，直接回答用户问题`);
+                        }
+
+                        // 辅助函数：将书签格式化为文本
+                        const formatBookmarks = (bookmarks: typeof allBookmarks): string => {
+                            return bookmarks.map(b => `${b.gName}|${b.name}|${b.url}${b.description ? '|' + b.description : ''}`).join('\n');
+                        };
+
+                        // 辅助函数：计算单批最大书签数
+                        const getBatchSize = (maxChars: number): number => {
+                            // 平均每条书签约80字符，预留空间给系统提示词和用户问题
+                            const reservedChars = 500;
+                            const availableChars = maxChars - reservedChars;
+                            return Math.floor(availableChars / 80);
+                        };
+
+                        try {
+                            const batchSize = getBatchSize(maxContextChars);
+                            const totalBookmarks = allBookmarks.length;
+                            
+                            // 如果没有书签或书签数量在限制内，直接一次处理
+                            if (totalBookmarks === 0 || totalBookmarks <= batchSize) {
+                                console.log(`[AI Chat] 单次处理，书签数: ${totalBookmarks}`);
+                                
+                                const bookmarkContext = totalBookmarks > 0 ? formatBookmarks(allBookmarks) : '';
+                                let systemPrompt: string;
+                                
+                                if (bookmarkContext) {
+                                    // 有书签数据
+                                    systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
+请用简洁友好的中文回复。
+
+以下是用户保存的书签数据，格式为"分组名|站点名|URL|描述"：
+${bookmarkContext}
+
+当用户询问与书签相关的问题时，请参考以上数据进行回答。`;
+                                } else if (shouldLoadBookmarks) {
+                                    // 意图识别需要书签，但用户没有书签
+                                    systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
+请用简洁友好的中文回复。
+
+用户暂无保存的书签数据。当用户询问与书签相关的问题时，请友好地告知用户还没有添加任何书签。`;
+                                } else {
+                                    // 意图识别判断不需要书签，直接回答
+                                    systemPrompt = `你是 NavTools 智能导航助手。你可以帮助用户搜索和推荐书签，也可以回答一般性问题。
+请用简洁友好的中文回复。
+
+请直接回答用户的问题，无需查询书签数据。`;
+                                }
+
+                                const messages = [
+                                    { role: 'system' as const, content: systemPrompt },
+                                    ...(body.history || []).slice(-10).map(m => ({
+                                        role: m.role as 'user' | 'assistant',
+                                        content: m.content,
+                                    })),
+                                    { role: 'user' as const, content: body.message },
+                                ];
+
+                                // 流式响应
+                                if (selectedModel.startsWith('@cf/')) {
+                                    const aiResponse = await env.AI!.run(selectedModel, { messages, stream: true });
+                                    const allowedOrigin = request.headers.get("Origin") || "*";
+                                    return new Response(aiResponse as ReadableStream, {
+                                        headers: {
+                                            "content-type": "text/event-stream",
+                                            "Access-Control-Allow-Origin": allowedOrigin,
+                                            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                                            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                                            "Access-Control-Allow-Credentials": "true",
+                                        },
+                                    });
+                                } else {
+                                    let baseUrl = env.AI_BASE_URL!.replace(/\/$/, '');
+                                    if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
+                                        baseUrl = `${baseUrl}/v1`;
+                                    }
+                                    const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${env.AI_API_KEY}`
+                                        },
+                                        body: JSON.stringify({ model: selectedModel, messages, stream: true })
+                                    });
+                                    const allowedOrigin = request.headers.get("Origin") || "*";
+                                    return new Response(chatResponse.body, {
+                                        headers: {
+                                            "content-type": "text/event-stream",
+                                            "Access-Control-Allow-Origin": allowedOrigin,
+                                            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                                            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                                            "Access-Control-Allow-Credentials": "true",
+                                        },
+                                    });
+                                }
+                            }
+
+                            // 分批处理：书签数量超出限制
+                            console.log(`[AI Chat] 分批处理，总书签: ${totalBookmarks}, 每批: ${batchSize}`);
+                            const batchCount = Math.ceil(totalBookmarks / batchSize);
+                            const batchResults: string[] = [];
+
+                            for (let i = 0; i < batchCount; i++) {
+                                const start = i * batchSize;
+                                const end = Math.min(start + batchSize, totalBookmarks);
+                                const batchBookmarks = allBookmarks.slice(start, end);
+                                
+                                const bookmarkContext = formatBookmarks(batchBookmarks);
+                                const systemPrompt = `你是 NavTools 智能导航助手。这是第 ${i + 1}/${batchCount} 批书签分析。
+请分析以下书签数据，提取与用户问题相关的信息。
+
+书签数据格式为"分组名|站点名|URL|描述"：
+${bookmarkContext}
+
+用户问题：${body.message}
+
+请分析这批书签，列出与问题相关的书签，并简要说明原因。如果这批中没有相关的，请说明"本批无相关书签"。`;
+
+                                const messages = [
+                                    { role: 'system' as const, content: systemPrompt },
+                                    { role: 'user' as const, content: '请分析这批书签数据' },
+                                ];
+
+                                console.log(`[AI Chat] 处理第 ${i + 1}/${batchCount} 批...`);
+                                const batchResult = await callAI(messages, false);
+                                batchResults.push(`【第 ${i + 1} 批分析】\n${batchResult}`);
+                            }
+
+                            // 合并所有批次的分析结果
+                            console.log(`[AI Chat] 合并 ${batchCount} 批分析结果...`);
+                            const mergePrompt = `你是 NavTools 智能导航助手。请综合以下各批次的分析结果，给用户一个完整、简洁的最终回答。
+
+用户原始问题：${body.message}
+
+各批次分析结果：
+${batchResults.join('\n\n')}
+
+请综合以上信息，给出最终回答：
+1. 总结相关的书签（按相关性排序）
+2. 给出简洁的推荐理由
+3. 如果用户问的是一般性问题而非书签相关，请直接回答
+
+请用中文回复，保持简洁友好。`;
+
+                            const finalMessages = [
+                                { role: 'system' as const, content: '你是 NavTools 智能导航助手，请综合各批次分析结果给出最终回答。' },
+                                ...(body.history || []).slice(-5).map(m => ({
+                                    role: m.role as 'user' | 'assistant',
+                                    content: m.content,
+                                })),
+                                { role: 'user' as const, content: mergePrompt },
+                            ];
+
+                            const finalResponse = await callAI(finalMessages, false);
+
+                            // 返回非流式响应
+                            return createJsonResponse({
+                                success: true,
+                                reply: finalResponse,
+                                meta: {
+                                    totalBookmarks,
+                                    batchCount,
+                                    processedInBatches: true
+                                }
+                            }, request);
+
                         } catch (aiError) {
                             const errorMsg = aiError instanceof Error ? aiError.message : String(aiError);
                             console.error('AI 调用失败:', errorMsg);

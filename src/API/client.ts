@@ -493,6 +493,29 @@ export class NavigationClient {
         throw new Error(errorMessage);
       }
 
+      // 检查响应类型：如果是 JSON（分批处理结果），直接解析返回
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const jsonData = await response.json();
+        if (jsonData.success && jsonData.reply) {
+          // 模拟流式输出，逐字显示
+          const reply = jsonData.reply;
+          let displayed = '';
+          for (let i = 0; i < reply.length; i++) {
+            displayed += reply[i];
+            onUpdate(displayed);
+            // 小延迟模拟打字效果
+            if (i % 10 === 0) {
+              await new Promise(resolve => setTimeout(resolve, 5));
+            }
+          }
+          return;
+        } else {
+          throw new Error(jsonData.message || 'AI 服务返回错误');
+        }
+      }
+
+      // 流式响应处理 (SSE)
       if (!response.body) return;
 
       const reader = response.body.getReader();
