@@ -318,8 +318,9 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
     }
   };
 
-  // 判断是否为当前正在编辑的分组
-  const isCurrentEditingGroup = sortMode === 'SiteSort' && currentSortingGroupId === group.id;
+  // 判断是否为当前正在编辑的分组（站点排序模式或编辑模式）
+  const isCurrentEditingGroup = (sortMode === 'SiteSort' && currentSortingGroupId === group.id) ||
+    (sortMode === 'None' && viewMode === 'edit' && !isBatchMode);
 
   // 判断是否有站点正在拖拽到此分组
   const isDraggingOverThisGroup: boolean =
