@@ -518,8 +518,26 @@ export class NavigationAPI {
    * 获取所有用户列表及其统计信息 (管理员专用)
    */
   async getAllUsers(): Promise<UserListItem[]> {
-    // 采用最稳健的子查询方式，直接在 SQL 层面完成统计
-    // 重点：不使用外部别名关联(如 s.user_id)，而是直接在内部 WHERE 匹配 u.id
+    // 先检查表结构，确定哪些字段存在
+    let groupsHasIsDeleted = false;
+    let sitesHasIsDeleted = false;
+
+    try {
+      const groupsSchema = await this.db.prepare("PRAGMA table_info(groups)").all<any>();
+      groupsHasIsDeleted = (groupsSchema.results || []).some((col: any) => col.name === 'is_deleted');
+
+      const sitesSchema = await this.db.prepare("PRAGMA table_info(sites)").all<any>();
+      sitesHasIsDeleted = (sitesSchema.results || []).some((col: any) => col.name === 'is_deleted');
+    } catch (e) {
+      console.warn('[Admin] 无法检查表结构，使用默认查询:', e);
+    }
+
+    // 根据字段存在情况构建查询
+    const groupsFilter = groupsHasIsDeleted ? 'AND (is_deleted = 0 OR is_deleted IS NULL)' : '';
+    // sites 统计需要同时检查 sites 和 groups 的 is_deleted
+    const sitesFilter = sitesHasIsDeleted ? 'AND (s.is_deleted = 0 OR s.is_deleted IS NULL)' : '';
+    const sitesGroupFilter = groupsHasIsDeleted ? 'AND (g.is_deleted = 0 OR g.is_deleted IS NULL)' : '';
+
     const query = `
       SELECT
         u.id,
@@ -530,10 +548,10 @@ export class NavigationAPI {
         u.created_at,
         u.last_login_at,
         COALESCE(u.login_count, 0) as login_count,
-        (SELECT COUNT(*) FROM groups WHERE user_id = u.id AND (is_deleted = 0 OR is_deleted IS NULL)) as group_count,
+        (SELECT COUNT(*) FROM groups WHERE user_id = u.id ${groupsFilter}) as group_count,
         (SELECT COUNT(*) FROM sites s
          JOIN groups g ON s.group_id = g.id
-         WHERE g.user_id = u.id AND (s.is_deleted = 0 OR s.is_deleted IS NULL)) as site_count,
+         WHERE g.user_id = u.id ${sitesFilter} ${sitesGroupFilter}) as site_count,
         COALESCE(q.usage_count, 0) as ai_usage_count
       FROM users u
       LEFT JOIN user_quotas q ON u.id = q.user_id
@@ -544,10 +562,11 @@ export class NavigationAPI {
       const result = await this.db.prepare(query).all<UserListItem>();
       const users = result.results || [];
 
-      // 这里的 debug 信息可以保留，方便万一还是 0 时排查
+      // 添加调试信息
       (users as any).debug = {
         rowCount: users.length,
-        hasData: users.some(u => u.group_count > 0 || u.site_count > 0)
+        hasData: users.some(u => u.group_count > 0 || u.site_count > 0),
+        schemaInfo: { groupsHasIsDeleted, sitesHasIsDeleted }
       };
 
       return users;

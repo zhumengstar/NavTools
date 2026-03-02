@@ -588,7 +588,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
               正在排序... (已自动保存)
             </Typography>
           ) : (
-            sortMode === 'None' &&
+            (sortMode === 'None' || sortMode === 'CrossGroupDrag') &&
             viewMode === 'edit' && ( // 只在编辑模式显示按钮
               <>
                 {/* 批量操作控制 */}

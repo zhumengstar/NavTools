@@ -1480,11 +1480,42 @@ export default {
                         }
                     }
 
-                    // DATA DEBUG ENDPOINT
+                    // DATA DEBUG ENDPOINT - 检查所有表结构
                     else if (path === "debug/schema" && method === "GET") {
                         try {
-                            const result = await env.DB.prepare("PRAGMA table_info(sites)").all();
-                            return createJsonResponse(result.results, request);
+                            const tables = ['users', 'groups', 'sites', 'user_quotas'];
+                            const schema: Record<string, any> = {};
+                            
+                            for (const table of tables) {
+                                try {
+                                    const result = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+                                    schema[table] = result.results || [];
+                                } catch (e) {
+                                    schema[table] = { error: String(e) };
+                                }
+                            }
+                            
+                            // 检查外键关系
+                            const foreignKeys: Record<string, any> = {};
+                            for (const table of tables) {
+                                try {
+                                    const result = await env.DB.prepare(`PRAGMA foreign_key_list(${table})`).all();
+                                    foreignKeys[table] = result.results || [];
+                                } catch (e) {
+                                    foreignKeys[table] = { error: String(e) };
+                                }
+                            }
+                            
+                            return createJsonResponse({ 
+                                schema,
+                                foreignKeys,
+                                check: {
+                                    sites_has_is_deleted: schema.sites?.some((col: any) => col.name === 'is_deleted') || false,
+                                    groups_has_is_deleted: schema.groups?.some((col: any) => col.name === 'is_deleted') || false,
+                                    users_has_login_count: schema.users?.some((col: any) => col.name === 'login_count') || false,
+                                    user_quotas_exists: Array.isArray(schema.user_quotas) && schema.user_quotas.length > 0
+                                }
+                            }, request);
                         } catch (error) {
                             return createJsonResponse({ error: String(error) }, request, { status: 500 });
                         }
