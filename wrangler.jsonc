@@ -1,6 +1,6 @@
 {
     "$schema": "node_modules/wrangler/config-schema.json",
-    "name": "navtools",
+    "name": "mynav",
     "main": "worker/index.ts",
     "account_id": "0f7122ab026d40f60676d876f61c3c98",
     "compatibility_date": "2026-01-01",
