@@ -319,7 +319,9 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
   };
 
   // 判断是否为当前正在编辑的分组（站点排序模式或编辑模式）
-  const isCurrentEditingGroup = (sortMode === 'SiteSort' && currentSortingGroupId === group.id) ||
+  // CrossGroupDrag 模式下所有分组都可拖拽
+  const isCurrentEditingGroup = sortMode === 'CrossGroupDrag' ||
+    (sortMode === 'SiteSort' && currentSortingGroupId === group.id) ||
     (sortMode === 'None' && viewMode === 'edit' && !isBatchMode);
 
   // 判断是否有站点正在拖拽到此分组
@@ -338,7 +340,11 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
 
     // 跨分组拖动模式 或 编辑模式
     // 编辑模式下不再需要嵌套 DndContext，因为 App.tsx 的顶层 DndContext 会处理
-    if (isCurrentEditingGroup || sortMode === 'CrossGroupDrag') {
+    // 注意：CrossGroupDrag 模式下 isCurrentEditingGroup 已经为 true
+    if (isCurrentEditingGroup) {
+      // 空分组时显示占位区域
+      const isEmpty = sitesToRender.length === 0;
+      
       return (
         <DroppableGroupContainer
           groupId={group.id}
@@ -348,32 +354,68 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
             items={sitesToRender.map((site) => `site-${site.id}`)}
             strategy={rectSortingStrategy}
           >
-            <Box sx={{ width: '100%' }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  margin: -1,
-                }}
-              >
-                {sitesToRender.map((site, idx) => (
-                  <Box
-                    key={site.id || idx}
-                    sx={{
-                      width: {
-                        xs: '50%',
-                        sm: '33.33%',
-                        md: '25%',
-                        lg: '20%',
-                        xl: '16.666%',
-                      },
-                      padding: 1,
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <SiteCard
-                      site={site}
-                      onUpdate={onUpdate}
+            <Box sx={{ width: '100%', minHeight: isEmpty ? 80 : 'auto' }}>
+              {isEmpty && isDraggingOverThisGroup && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 80,
+                    border: '2px dashed',
+                    borderColor: 'primary.main',
+                    borderRadius: 2,
+                    bgcolor: 'action.hover',
+                    color: 'primary.main',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  松开以放置到这里
+                </Box>
+              )}
+              {isEmpty && !isDraggingOverThisGroup && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 80,
+                    border: '1px dashed',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    color: 'text.secondary',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  拖动书签到这里
+                </Box>
+              )}
+              {!isEmpty && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    margin: -1,
+                  }}
+                >
+                  {sitesToRender.map((site, idx) => (
+                    <Box
+                      key={site.id || idx}
+                      sx={{
+                        width: {
+                          xs: '50%',
+                          sm: '33.33%',
+                          md: '25%',
+                          lg: '20%',
+                          xl: '16.666%',
+                        },
+                        padding: 1,
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <SiteCard
+                        site={site}
+                        onUpdate={onUpdate}
                       onDelete={onDelete}
                       onSiteClick={onSiteClick}
                       onSettingsOpen={onSettingsOpen}
@@ -387,6 +429,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
                   </Box>
                 ))}
               </Box>
+              )}
             </Box>
           </SortableContext>
         </DroppableGroupContainer>
