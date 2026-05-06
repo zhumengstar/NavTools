@@ -161,7 +161,6 @@ export interface SendCodeRequest {
 export interface SendCodeResponse {
   success: boolean;
   message?: string;
-  code?: string; // 开发模式：返回验证码用于自动填充
 }
 
 // 用户列表项接口 (管理专用)
@@ -203,8 +202,12 @@ export class NavigationAPI {
       this.authEnabled = env.AUTH_ENABLED === 'true';
       this.username = env.AUTH_USERNAME || '';
       this.passwordHash = env.AUTH_PASSWORD || '';
-      this.secret = env.AUTH_SECRET || 'your-secret-key';
+      this.secret = env.AUTH_SECRET || '';
     }
+  }
+
+  private hasUsableAuthSecret(): boolean {
+    return !this.authEnabled || this.secret.trim().length >= 32;
   }
 
   // 初始化数据库表
@@ -447,6 +450,10 @@ export class NavigationAPI {
         token: await this.generateToken({ username: 'guest' }, false),
         message: '身份验证未启用，默认登录成功',
       };
+    }
+
+    if (!this.hasUsableAuthSecret()) {
+      return { success: false, message: '认证密钥未配置或长度不足，请配置 AUTH_SECRET' };
     }
 
     // 优先从 users 表查询用户
@@ -696,8 +703,8 @@ export class NavigationAPI {
         // 验证码使用后立即删除
         await env.KV.delete(`reset_code:${request.username}`);
       } else if (this.authEnabled) {
-        // 如果启用了认证但没有 KV，处于降级模式或本地开发未配置 KV
-        console.warn('KV 存储未配置，跳过验证码校验');
+        console.error('KV 存储未配置，拒绝密码重置');
+        return { success: false, message: '系统配置错误：无法验证验证码' };
       }
 
       // 查找用户
@@ -745,16 +752,14 @@ export class NavigationAPI {
         .bind(request.username)
         .first<{ email: string }>();
 
-      if (!user) {
-        return { success: false, message: '用户名不存在' };
-      }
-
-      if (!user.email || user.email.toLowerCase() !== request.email.toLowerCase()) {
-        return { success: false, message: '输入的邮箱与注册邮箱不匹配' };
+      if (!user || !user.email || user.email.toLowerCase() !== request.email.toLowerCase()) {
+        return { success: true, message: '如果账号信息匹配，验证码将发送到对应邮箱' };
       }
 
       // 2. 生成 6 位数字验证码
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const randomValues = new Uint32Array(1);
+      crypto.getRandomValues(randomValues);
+      const code = (100000 + ((randomValues[0] ?? 0) % 900000)).toString();
 
       // 3. 存储到 KV，有效期 10 分钟
       if (env.KV) {
@@ -773,13 +778,11 @@ export class NavigationAPI {
       );
 
       if (!emailResult) {
-        // 开发/调试模式：如果邮件发送失败且处于特定环境，可以从日志查看验证码
-        // 用户请求：先不实现发送验证码，先前端回显，且算验证码获取成功
-        console.log(`[DEBUG] 验证码发送失败，当前生成的验证码为: ${code}`);
-        return { success: true, message: '验证码发送模拟成功（邮件未配置）', code };
+        await env.KV.delete(`reset_code:${request.username}`);
+        return { success: false, message: '验证码邮件发送失败，请稍后重试' };
       }
 
-      return { success: true, message: '验证码已发送到您的邮箱', code };
+      return { success: true, message: '验证码已发送到您的邮箱' };
     } catch (error) {
       console.error('发送验证码失败:', error);
       return { success: false, message: '发送验证码失败，请稍后重试' };
@@ -791,12 +794,10 @@ export class NavigationAPI {
    * 使用 Resend (每天 100 封免费额度，无需域名验证即可使用测试域名)
    */
   private async sendEmail(to: string, subject: string, content: string, env: Env): Promise<boolean> {
-    // 调试输出：即使邮件没发出去，你也能在控制台看到验证码
-    console.log(`[EMAIL DEBUG] 发送至: ${to}, 主题: ${subject}, 内容: ${content}`);
+    console.log(`[EMAIL] 发送验证码邮件至: ${to}, 主题: ${subject}`);
 
     if (!env.EMAIL_API_KEY) {
       console.warn('EMAIL_API_KEY 未配置，跳过真实邮件发送。');
-      // 注意：返回 false 意味着 API 会告诉前端发送失败，但你可以通过日志看到验证码
       return false;
     }
 
@@ -832,6 +833,11 @@ export class NavigationAPI {
   async verifyToken(token: string): Promise<{ valid: boolean; payload?: Record<string, unknown> }> {
     if (!this.authEnabled) {
       return { valid: true };
+    }
+
+    if (!this.hasUsableAuthSecret()) {
+      console.error('AUTH_SECRET missing or too short; rejecting token verification');
+      return { valid: false };
     }
 
     try {
@@ -894,6 +900,10 @@ export class NavigationAPI {
     payload: Record<string, unknown>,
     rememberMe: boolean = false
   ): Promise<string> {
+    if (!this.hasUsableAuthSecret()) {
+      throw new Error('AUTH_SECRET missing or too short');
+    }
+
     // 准备payload
     const expiresIn = rememberMe
       ? 30 * 24 * 60 * 60 // 30天 (一个月)
@@ -984,10 +994,14 @@ export class NavigationAPI {
     return result.results || [];
   }
 
-  async getGroup(id: number): Promise<Group | null> {
+  async getGroup(id: number, userId?: number): Promise<Group | null> {
+    const query = userId !== undefined
+      ? 'SELECT id, name, order_num, is_public, user_id, is_deleted, deleted_at, is_protected, created_at, updated_at FROM groups WHERE id = ? AND user_id = ?'
+      : 'SELECT id, name, order_num, is_public, user_id, is_deleted, deleted_at, is_protected, created_at, updated_at FROM groups WHERE id = ?';
+    const params = userId !== undefined ? [id, userId] : [id];
     const result = await this.db
-      .prepare('SELECT id, name, order_num, created_at, updated_at FROM groups WHERE id = ?')
-      .bind(id)
+      .prepare(query)
+      .bind(...params)
       .first<Group>();
     return result;
   }
@@ -1018,7 +1032,7 @@ export class NavigationAPI {
     return createdGroup;
   }
 
-  async updateGroup(id: number, group: Partial<Group>): Promise<Group | null> {
+  async updateGroup(id: number, group: Partial<Group>, userId?: number): Promise<Group | null> {
     // 字段白名单
     const ALLOWED_FIELDS = ['name', 'order_num', 'is_public'] as const;
     type AllowedField = (typeof ALLOWED_FIELDS)[number];
@@ -1044,8 +1058,9 @@ export class NavigationAPI {
     // 构建安全的参数化查询
     const query = `UPDATE groups SET ${updates.join(
       ', '
-    )} WHERE id = ? RETURNING id, name, order_num, created_at, updated_at`;
+    )} WHERE id = ?${userId !== undefined ? ' AND user_id = ?' : ''} RETURNING id, name, order_num, is_public, user_id, created_at, updated_at`;
     params.push(id);
+    if (userId !== undefined) params.push(userId);
 
     const result = await this.db
       .prepare(query)
@@ -1065,17 +1080,22 @@ export class NavigationAPI {
   }
 
   // 软删除分组
-  async softDeleteGroup(id: number): Promise<boolean> {
+  async softDeleteGroup(id: number, userId?: number): Promise<boolean> {
     try {
       // 检查是否为受保护的分组 (使用 is_protected 标志)
-      const group = await this.getGroup(id);
+      const group = await this.getGroup(id, userId);
+      if (!group) {
+        return false;
+      }
       if (group?.is_protected === 1) {
         throw new Error('此分组是受保护的，不允许删除');
       }
 
+      const query = `UPDATE groups SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?${userId !== undefined ? ' AND user_id = ?' : ''}`;
+      const params = userId !== undefined ? [id, userId] : [id];
       await this.db
-        .prepare('UPDATE groups SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .bind(id)
+        .prepare(query)
+        .bind(...params)
         .run();
       return true;
     } catch (error) {
@@ -1085,13 +1105,15 @@ export class NavigationAPI {
   }
 
   // 恢复分组
-  async restoreGroup(id: number): Promise<Group | null> {
+  async restoreGroup(id: number, userId?: number): Promise<Group | null> {
     try {
+      const query = `UPDATE groups SET is_deleted = 0, deleted_at = NULL WHERE id = ?${userId !== undefined ? ' AND user_id = ?' : ''}`;
+      const params = userId !== undefined ? [id, userId] : [id];
       await this.db
-        .prepare('UPDATE groups SET is_deleted = 0, deleted_at = NULL WHERE id = ?')
-        .bind(id)
+        .prepare(query)
+        .bind(...params)
         .run();
-      return this.getGroup(id);
+      return this.getGroup(id, userId);
     } catch (error) {
       console.error('恢复分组失败:', error);
       return null;
@@ -1099,15 +1121,20 @@ export class NavigationAPI {
   }
 
   // 彻底删除分组
-  async deleteGroupPermanently(id: number): Promise<boolean> {
+  async deleteGroupPermanently(id: number, userId?: number): Promise<boolean> {
     try {
       // 检查是否为受保护的分组 (使用 is_protected 标志)
-      const group = await this.getGroup(id);
+      const group = await this.getGroup(id, userId);
+      if (!group) {
+        return false;
+      }
       if (group?.is_protected === 1) {
         throw new Error('此分组是受保护的，不允许彻底删除');
       }
 
-      await this.db.prepare('DELETE FROM groups WHERE id = ?').bind(id).run();
+      const query = `DELETE FROM groups WHERE id = ?${userId !== undefined ? ' AND user_id = ?' : ''}`;
+      const params = userId !== undefined ? [id, userId] : [id];
+      await this.db.prepare(query).bind(...params).run();
       return true;
     } catch (error) {
       console.error('彻底删除分组失败:', error);
@@ -1445,17 +1472,25 @@ export class NavigationAPI {
     }));
   }
 
-  async getSite(id: number): Promise<Site | null> {
+  async getSite(id: number, userId?: number): Promise<Site | null> {
+    const ownerWhere = userId !== undefined ? ' AND g.user_id = ?' : '';
+    const params = userId !== undefined ? [id, userId] : [id];
     const result = await this.db
       .prepare(
-        'SELECT id, group_id, name, url, icon, description, notes, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at FROM sites WHERE id = ?'
+        `SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at, g.user_id as user_id FROM sites s JOIN groups g ON s.group_id = g.id WHERE s.id = ?${ownerWhere}`
       )
-      .bind(id)
+      .bind(...params)
       .first<Site>();
     return result;
   }
 
-  async createSite(site: Site): Promise<Site> {
+  async createSite(site: Site, userId?: number): Promise<Site> {
+    if (userId !== undefined) {
+      const group = await this.getGroup(site.group_id, userId);
+      if (!group) {
+        throw new Error('无权在该分组下创建站点');
+      }
+    }
     // 1. 规范化 URL（小写化域名部分，移除末尾斜杠）
     const trimmedUrl = site.url.trim();
     const normalizedUrl = trimmedUrl.replace(/\/+$/, '');
@@ -1506,7 +1541,19 @@ export class NavigationAPI {
     return createdSite;
   }
 
-  async updateSite(id: number, site: Partial<Site>): Promise<Site | null> {
+  async updateSite(id: number, site: Partial<Site>, userId?: number): Promise<Site | null> {
+    if (userId !== undefined) {
+      const currentSite = await this.getSite(id, userId);
+      if (!currentSite) {
+        return null;
+      }
+      if (site.group_id !== undefined) {
+        const targetGroup = await this.getGroup(site.group_id, userId);
+        if (!targetGroup) {
+          return null;
+        }
+      }
+    }
     // 字段白名单
     const ALLOWED_FIELDS = [
       'group_id',
@@ -1542,8 +1589,9 @@ export class NavigationAPI {
     // 构建安全的参数化查询
     const query = `UPDATE sites SET ${updates.join(
       ', '
-    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at`;
+    )} WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''} RETURNING id, group_id, name, url, icon, description, notes, order_num, is_public, is_featured, created_at, updated_at`;
     params.push(id);
+    if (userId !== undefined) params.push(userId);
 
     const result = await this.db
       .prepare(query)
@@ -1563,29 +1611,35 @@ export class NavigationAPI {
     return site || null;
   }
 
-  async deleteSite(id: number): Promise<boolean> {
-    const result = await this.db.prepare('DELETE FROM sites WHERE id = ?').bind(id).run();
+  async deleteSite(id: number, userId?: number): Promise<boolean> {
+    const query = `DELETE FROM sites WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`;
+    const params = userId !== undefined ? [id, userId] : [id];
+    const result = await this.db.prepare(query).bind(...params).run();
     return result.success;
   }
 
   // Soft delete site
-  async softDeleteSite(id: number): Promise<boolean> {
+  async softDeleteSite(id: number, userId?: number): Promise<boolean> {
+    const query = `UPDATE sites SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`;
+    const params = userId !== undefined ? [id, userId] : [id];
     const result = await this.db
-      .prepare('UPDATE sites SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(id)
+      .prepare(query)
+      .bind(...params)
       .run();
     return result.success;
   }
 
-  async clickSite(id: number): Promise<boolean> {
+  async clickSite(id: number, userId?: number): Promise<boolean> {
     try {
       // 生成北京时间 (UTC+8)
       const now = new Date();
       const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace('Z', '').split('.')[0];
 
+      const query = `UPDATE sites SET last_clicked_at = ? WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`;
+      const params = userId !== undefined ? [beijingTime, id, userId] : [beijingTime, id];
       const result = await this.db
-        .prepare('UPDATE sites SET last_clicked_at = ? WHERE id = ?')
-        .bind(beijingTime, id)
+        .prepare(query)
+        .bind(...params)
         .run();
       return result.success;
     } catch (error) {
@@ -1595,10 +1649,12 @@ export class NavigationAPI {
   }
 
   // Restore site
-  async restoreSite(id: number): Promise<Site | null> {
+  async restoreSite(id: number, userId?: number): Promise<Site | null> {
+    const query = `UPDATE sites SET is_deleted = 0, deleted_at = NULL WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''} RETURNING *`;
+    const params = userId !== undefined ? [id, userId] : [id];
     const result = await this.db
-      .prepare('UPDATE sites SET is_deleted = 0, deleted_at = NULL WHERE id = ? RETURNING *')
-      .bind(id)
+      .prepare(query)
+      .bind(...params)
       .first<Site>();
     return result || null;
   }
@@ -1692,35 +1748,35 @@ export class NavigationAPI {
   }
 
   // 批量更新排序
-  async updateGroupOrder(groupOrders: { id: number; order_num: number }[]): Promise<boolean> {
+  async updateGroupOrder(groupOrders: { id: number; order_num: number }[], userId?: number): Promise<boolean> {
     // 使用事务确保所有更新一起成功或失败
     return await this.db
       .batch(
         groupOrders.map((item) =>
           this.db
-            .prepare('UPDATE groups SET order_num = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-            .bind(item.order_num, item.id)
+            .prepare(`UPDATE groups SET order_num = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?${userId !== undefined ? ' AND user_id = ?' : ''}`)
+            .bind(...(userId !== undefined ? [item.order_num, item.id, userId] : [item.order_num, item.id]))
         )
       )
       .then(() => true)
       .catch(() => false);
   }
 
-  async updateSiteOrder(siteOrders: { id: number; order_num: number }[]): Promise<boolean> {
+  async updateSiteOrder(siteOrders: { id: number; order_num: number }[], userId?: number): Promise<boolean> {
     // 使用事务确保所有更新一起成功或失败
     return await this.db
       .batch(
         siteOrders.map((item) =>
           this.db
-            .prepare('UPDATE sites SET order_num = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-            .bind(item.order_num, item.id)
+            .prepare(`UPDATE sites SET order_num = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`)
+            .bind(...(userId !== undefined ? [item.order_num, item.id, userId] : [item.order_num, item.id]))
         )
       )
       .then(() => true)
       .catch(() => false);
   }
 
-  async deleteSites(ids: number[]): Promise<boolean> {
+  async deleteSites(ids: number[], userId?: number): Promise<boolean> {
     if (!ids || ids.length === 0) return true;
 
     // 使用 batch 执行多个单独的更新或者使用 IN 子句
@@ -1729,8 +1785,8 @@ export class NavigationAPI {
       .batch(
         ids.map((id) =>
           this.db
-            .prepare('UPDATE sites SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?')
-            .bind(id)
+            .prepare(`UPDATE sites SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`)
+            .bind(...(userId !== undefined ? [id, userId] : [id]))
         )
       )
       .then(() => true)
@@ -1740,15 +1796,15 @@ export class NavigationAPI {
       });
   }
 
-  async restoreSites(ids: number[]): Promise<boolean> {
+  async restoreSites(ids: number[], userId?: number): Promise<boolean> {
     if (!ids || ids.length === 0) return true;
 
     return await this.db
       .batch(
         ids.map((id) =>
           this.db
-            .prepare('UPDATE sites SET is_deleted = 0, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-            .bind(id)
+            .prepare(`UPDATE sites SET is_deleted = 0, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`)
+            .bind(...(userId !== undefined ? [id, userId] : [id]))
         )
       )
       .then(() => true)
@@ -1758,15 +1814,15 @@ export class NavigationAPI {
       });
   }
 
-  async deleteSitesPermanently(ids: number[]): Promise<boolean> {
+  async deleteSitesPermanently(ids: number[], userId?: number): Promise<boolean> {
     if (!ids || ids.length === 0) return true;
 
     return await this.db
       .batch(
         ids.map((id) =>
           this.db
-            .prepare('DELETE FROM sites WHERE id = ?')
-            .bind(id)
+            .prepare(`DELETE FROM sites WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`)
+            .bind(...(userId !== undefined ? [id, userId] : [id]))
         )
       )
       .then(() => true)
@@ -1777,15 +1833,15 @@ export class NavigationAPI {
   }
 
   // 导出所有数据
-  async exportData(): Promise<ExportData> {
+  async exportData(userId: number = 1): Promise<ExportData> {
     // 获取所有分组
-    const groups = await this.getGroups();
+    const groups = await this.getGroups(userId);
 
     // 获取所有站点
-    const sites = await this.getSites();
+    const sites = await this.getSites(undefined, userId);
 
     // 获取所有配置
-    const configs = await this.getConfigs();
+    const configs = await this.getConfigs(userId);
 
     return {
       groups,
@@ -1969,7 +2025,7 @@ export class NavigationAPI {
   /**
    * 批量更新站点属性
    */
-  async batchUpdateSites(ids: number[], data: Partial<Site>): Promise<{ success: boolean; message: string; count: number }> {
+  async batchUpdateSites(ids: number[], data: Partial<Site>, userId?: number): Promise<{ success: boolean; message: string; count: number }> {
     try {
       if (!ids.length) return { success: true, message: '没有选中的站点', count: 0 };
 
@@ -1980,8 +2036,15 @@ export class NavigationAPI {
       const updates: string[] = [];
       const baseValues: any[] = [];
 
+      const ALLOWED_FIELDS = new Set(['group_id', 'name', 'url', 'icon', 'description', 'notes', 'order_num', 'is_public', 'is_featured']);
+
+      if (userId !== undefined && data.group_id !== undefined) {
+        const targetGroup = await this.getGroup(data.group_id, userId);
+        if (!targetGroup) return { success: false, message: '无权移动到该分组', count: 0 };
+      }
+
       for (const [key, value] of Object.entries(data)) {
-        if (value !== undefined) {
+        if (value !== undefined && ALLOWED_FIELDS.has(key)) {
           updates.push(`${key} = ?`);
           baseValues.push(value);
         }
@@ -1989,12 +2052,12 @@ export class NavigationAPI {
       updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
       const updateClause = updates.join(', ');
-      const query = `UPDATE sites SET ${updateClause} WHERE id = ?`;
+      const query = `UPDATE sites SET ${updateClause} WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''}`;
 
       // Create individual statements for each ID
       const stmts = ids.map(id => {
         // Values for this specific statement: base values + current ID
-        return this.db.prepare(query).bind(...baseValues, id);
+        return this.db.prepare(query).bind(...baseValues, ...(userId !== undefined ? [id, userId] : [id]));
       });
 
       console.log(`[Worker Debug] Batch updating ${stmts.length} sites with query: ${query}`);

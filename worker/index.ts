@@ -219,17 +219,16 @@ function getCorsHeaders(request: Request): Record<string, string> {
 
     if (origin) {
         const originUrl = new URL(origin);
-        // 允许任何 IP/域名的 8787/8788 端口，以及所有的 .workers.dev
+        // Allow local development ports and same-origin requests.
         const isAllowed = originUrl.port === '8787' || 
                          originUrl.port === '8788' ||
-                         origin.endsWith('.workers.dev') ||
                          origin === requestUrl.origin;
 
         allowedOrigin = isAllowed ? origin : null;
     }
 
-    // 默认回退到请求的 Origin (如果存在) 或同源，实现完全动态
-    const finalOrigin = allowedOrigin || origin || requestUrl.origin;
+    // Fall back to the worker origin so untrusted origins do not get credentialed CORS.
+    const finalOrigin = allowedOrigin || requestUrl.origin;
 
     return {
         'Access-Control-Allow-Origin': finalOrigin,
@@ -361,7 +360,7 @@ export default {
                                 }
 
                                 return createJsonResponse(
-                                    { success: true, message: result.message },
+                                    { success: true, message: result.message, userId: result.userId },
                                     request,
                                     {
                                         headers: {
@@ -496,8 +495,8 @@ export default {
                                 );
                             }
 
-                            const email = await api.getUserEmail(username);
-                            return createJsonResponse({ email }, request);
+                            await api.getUserEmail(username);
+                            return createJsonResponse({ success: true }, request);
                         } catch (error) {
                             return createJsonResponse(
                                 {
@@ -798,6 +797,19 @@ export default {
                                 { status: 400 }
                             );
                         }
+
+                        if (targetUserId !== currentUserId) {
+                            const profile = currentUserId ? await api.getUserProfile(currentUserId) : null;
+                            const isAdmin = profile?.role?.toLowerCase().trim() === 'admin';
+                            if (!isAdmin) {
+                                return createJsonResponse(
+                                    { success: false, message: '无权查看该用户的书签' },
+                                    request,
+                                    { status: 403 }
+                                );
+                            }
+                        }
+
                         const groupsWithSites = await api.getGroupsWithSites(targetUserId, { includeDeleted });
                         
                         // 调试日志：记录返回的分组数据
@@ -853,6 +865,11 @@ export default {
                             // 未认证用户只能看到公开分组
                             conditions.push('is_public = ?');
                             params.push(1);
+                        } else if (currentUserId !== undefined) {
+                            conditions.push('user_id = ?');
+                            params.push(currentUserId);
+                        } else {
+                            return createResponse("未认证", request, { status: 401 });
                         }
 
                         if (conditions.length > 0) {
@@ -875,7 +892,7 @@ export default {
                         if (isNaN(id)) {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
-                        const group = await api.getGroup(id);
+                        const group = await api.getGroup(id, currentUserId);
                         return createJsonResponse(group, request);
                     } else if (path === "groups" && method === "POST") {
                         const data = (await validateRequestBody(request)) as GroupInput;
@@ -932,9 +949,9 @@ export default {
                             );
                         }
 
-                        const result = await api.updateGroup(id, data);
+                        const result = await api.updateGroup(id, data, currentUserId);
                         return createJsonResponse(result, request);
-                    } else if (path.startsWith("groups/") && method === "DELETE") {
+                    } else if (path.startsWith("groups/") && method === "DELETE" && !path.endsWith("/permanent")) {
                         // DELETE /groups/:id 现在执行软删除
                         const idStr = path.split("/")[1];
                         if (!idStr) {
@@ -945,7 +962,7 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.softDeleteGroup(id);
+                        const result = await api.softDeleteGroup(id, currentUserId);
                         return createJsonResponse({ success: result }, request);
 
                     } else if (path.startsWith("groups/") && path.endsWith("/restore") && method === "POST") {
@@ -964,7 +981,7 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.restoreGroup(id);
+                        const result = await api.restoreGroup(id, currentUserId);
                         if (!result) {
                             return createJsonResponse({ error: "恢复失败或分组不存在" }, request, { status: 404 });
                         }
@@ -985,12 +1002,8 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.deleteGroupPermanently(id);
+                        const result = await api.deleteGroupPermanently(id, currentUserId);
                         return createJsonResponse({ success: result }, request);
-                    } else if (path === "groups/trash" && method === "GET") {
-                        // GET /groups/trash 获取回收站分组
-                        const groups = await api.getTrashGroups(currentUserId);
-                        return createJsonResponse(groups, request);
                     }
                     // 站点相关API
                     else if (path === "sites" && method === "GET") {
@@ -1017,6 +1030,11 @@ export default {
                             params.push(1);
                             conditions.push('s.is_public = ?');
                             params.push(1);
+                        } else if (currentUserId !== undefined) {
+                            conditions.push('g.user_id = ?');
+                            params.push(currentUserId);
+                        } else {
+                            return createResponse("未认证", request, { status: 401 });
                         }
 
                         if (conditions.length > 0) {
@@ -1035,7 +1053,10 @@ export default {
 
                         // 如果登录成功，设置 HttpOnly Cookie
                         if (result.success && result.token) {
-                            const response = createJsonResponse(result, request);
+                            const response = createJsonResponse(
+                                { success: true, message: result.message, userId: result.userId },
+                                request
+                            );
                             // 计算过期时间
                             const maxAge = data.rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60;
 
@@ -1080,12 +1101,8 @@ export default {
                             return createJsonResponse({ error: "用户名不能为空" }, request, { status: 400 });
                         }
 
-                        const email = await api.getUserEmail(username);
-                        if (!email) {
-                            return createJsonResponse({ success: false, message: "用户不存在或未绑定邮箱" }, request);
-                        }
-
-                        return createJsonResponse({ success: true, email }, request);
+                        await api.getUserEmail(username);
+                        return createJsonResponse({ success: true }, request);
                     } else if (path === "sites/trash" && method === "GET") {
                         const sites = await api.getTrashSites(currentUserId);
                         return createJsonResponse(sites, request);
@@ -1099,7 +1116,7 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const site = await api.getSite(id);
+                        const site = await api.getSite(id, currentUserId);
                         return createJsonResponse(site, request);
                     } else if (path === "sites" && method === "POST") {
                         const data = (await validateRequestBody(request)) as SiteInput;
@@ -1117,7 +1134,7 @@ export default {
                             );
                         }
 
-                        const result = await api.createSite(validation.sanitizedData as Site);
+                        const result = await api.createSite(validation.sanitizedData as Site, currentUserId);
                         return createJsonResponse(result, request);
                     } else if (path.startsWith("sites/") && method === "PUT" && path !== "sites/batch") {
                         const idStr = path.split("/")[1];
@@ -1179,7 +1196,7 @@ export default {
                             data.is_public = 1;
                         }
 
-                        const result = await api.updateSite(id, data);
+                        const result = await api.updateSite(id, data, currentUserId);
                         return createJsonResponse(result, request);
                     } else if (path.startsWith("sites/") && path.endsWith("/click") && method === "POST") {
                         const idStr = path.split("/")[1];
@@ -1191,9 +1208,9 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.clickSite(id);
+                        const result = await api.clickSite(id, currentUserId);
                         return createJsonResponse({ success: result }, request);
-                    } else if (path.startsWith("sites/") && method === "DELETE") {
+                    } else if (path.startsWith("sites/") && method === "DELETE" && !path.endsWith("/permanent")) {
                         const idStr = path.split("/")[1];
                         if (!idStr) {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
@@ -1203,7 +1220,7 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.softDeleteSite(id);
+                        const result = await api.softDeleteSite(id, currentUserId);
                         return createJsonResponse({ success: result }, request);
 
                     } else if (path.startsWith("sites/") && path.endsWith("/restore") && method === "POST") {
@@ -1221,7 +1238,7 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.restoreSite(id);
+                        const result = await api.restoreSite(id, currentUserId);
                         if (!result) {
                             return createJsonResponse({ error: "恢复失败或站点不存在" }, request, { status: 404 });
                         }
@@ -1242,7 +1259,7 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.deleteSite(id);
+                        const result = await api.deleteSite(id, currentUserId);
                         return createJsonResponse({ success: result }, request);
                     }
                     else if (path === "sites/batch-delete" && method === "POST") {
@@ -1250,7 +1267,7 @@ export default {
                         if (!data.ids || !Array.isArray(data.ids)) {
                             return createJsonResponse({ success: false, message: "无效的 ID 列表" }, request, { status: 400 });
                         }
-                        const result = await api.deleteSites(data.ids);
+                        const result = await api.deleteSites(data.ids, currentUserId);
                         return createJsonResponse({ success: result }, request);
                     }
                     else if (path === "sites/batch-restore" && method === "POST") {
@@ -1258,7 +1275,7 @@ export default {
                         if (!data.ids || !Array.isArray(data.ids)) {
                             return createJsonResponse({ success: false, message: "无效的 ID 列表" }, request, { status: 400 });
                         }
-                        const result = await api.restoreSites(data.ids);
+                        const result = await api.restoreSites(data.ids, currentUserId);
                         return createJsonResponse({ success: result }, request);
                     }
                     else if (path === "sites/batch-delete-permanent" && method === "POST") {
@@ -1266,7 +1283,7 @@ export default {
                         if (!data.ids || !Array.isArray(data.ids)) {
                             return createJsonResponse({ success: false, message: "无效的 ID 列表" }, request, { status: 400 });
                         }
-                        const result = await api.deleteSitesPermanently(data.ids);
+                        const result = await api.deleteSitesPermanently(data.ids, currentUserId);
                         return createJsonResponse({ success: result }, request);
                     }
                     // 批量更新排序
@@ -1303,7 +1320,7 @@ export default {
                             }
                         }
 
-                        const result = await api.updateGroupOrder(data);
+                        const result = await api.updateGroupOrder(data, currentUserId);
                         return createJsonResponse({ success: result }, request);
                     } else if (path === "site-orders" && method === "PUT") {
                         const data = (await validateRequestBody(request)) as Array<{ id: number; order_num: number }>;
@@ -1338,7 +1355,7 @@ export default {
                             }
                         }
 
-                        const result = await api.updateSiteOrder(data);
+                        const result = await api.updateSiteOrder(data, currentUserId);
                         return createJsonResponse({ success: result }, request);
                     }
                     // 配置相关API
@@ -1424,7 +1441,7 @@ export default {
 
                     // 数据导出路由
                     else if (path === "export" && method === "GET") {
-                        const data = await api.exportData();
+                        const data = await api.exportData(currentUserId);
                         return createJsonResponse(data, request, {
                             headers: {
                                 "Content-Disposition": "attachment; filename=navhive-data.json",
@@ -1660,7 +1677,7 @@ export default {
                         // 循环处理站点
                         for (const id of ids) {
                             try {
-                                const site = await api.getSite(id);
+                                const site = await api.getSite(id, currentUserId);
                                 if (!site || site.user_id !== currentUserId) continue;
 
                                 let siteInfo: any = { success: false };
@@ -1718,8 +1735,8 @@ export default {
                                     const autoNote = `系统自动识别：该网站打不开（${new Date().toLocaleString()}），已自动移动到回收站`;
                                     const updatedNote = site.notes ? `${site.notes}\n\n${autoNote}` : autoNote;
 
-                                    await api.updateSite(id, { notes: updatedNote });
-                                    await api.deleteSite(id);
+                                    await api.updateSite(id, { notes: updatedNote }, currentUserId);
+                                    await api.deleteSite(id, currentUserId);
                                     results.push({ id, success: true, deadLink: true });
                                     continue;
                                 }
@@ -1730,7 +1747,7 @@ export default {
                                         name: site.name || siteInfo.name || "",
                                         description: site.description || siteInfo.description || "",
                                     };
-                                    await api.updateSite(id, updatedData);
+                                    await api.updateSite(id, updatedData, currentUserId);
                                     results.push({ id, success: true, data: updatedData });
                                 }
 
@@ -1761,7 +1778,7 @@ export default {
 
                             const results = await Promise.all(siteIds.map(async (siteId) => {
                                 try {
-                                    const site = await api.getSiteById(siteId);
+                                    const site = await api.getSite(siteId, currentUserId);
                                     if (!site) {
                                         return { id: siteId, success: false, message: "站点未找到" };
                                     }
@@ -1811,7 +1828,7 @@ export default {
                                     await rewriter.transform(fetchResponse).arrayBuffer();
 
                                     if (icon) {
-                                        const updateResult = await api.updateSite(siteId, { icon });
+                                        const updateResult = await api.updateSite(siteId, { icon }, currentUserId);
                                         return { id: siteId, success: updateResult, icon };
                                     } else {
                                         return { id: siteId, success: false, message: "未找到图标" };
@@ -1845,7 +1862,7 @@ export default {
                                 data.data.is_public = 1;
                             }
 
-                            const result = await api.batchUpdateSites(data.ids, data.data);
+                            const result = await api.batchUpdateSites(data.ids, data.data, currentUserId);
                             return createJsonResponse(result, request);
                         } catch (error) {
                             console.error('Batch update failed:', error);
@@ -2275,7 +2292,7 @@ export default {
                                 const searchQuery = encodeURIComponent(body.message);
                                 
                                 // 优先尝试使用 SerpAPI (如果有配置)
-                                if (env.SERP_API_KEY) {
+                                if (env.SERP_API_KEY && env.PREFERRED_SEARCH_ENGINE !== 'baidu') {
                                     const serpResponse = await fetch(
                                         `https://serpapi.com/search?q=${searchQuery}&engine=google&api_key=${env.SERP_API_KEY}&num=5`,
                                         { method: 'GET' }

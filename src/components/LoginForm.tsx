@@ -25,7 +25,7 @@ interface LoginFormProps {
   onLogin: (username: string, password: string, rememberMe: boolean) => void;
   onRegister: (username: string, password: string, email: string) => void;
   onResetPassword: (username: string, newPassword: string, code: string) => void;
-  onSendCode: (username: string, email: string) => Promise<{ success: boolean; message?: string; code?: string }>;
+  onSendCode: (username: string, email: string) => Promise<{ success: boolean; message?: string }>;
   onGetEmail?: (username: string) => Promise<string | null>; // 新增：获取邮箱回调
   loading?: boolean;
   error?: string | null;
@@ -60,24 +60,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [code, setCode] = useState(''); // 新增验证码状态
-
-  // 自动填充上次登录的账号密码
-  React.useEffect(() => {
-    try {
-      const savedCredentials = localStorage.getItem('saved_credentials');
-      if (savedCredentials && mode === 'login') {
-        const decoded = atob(savedCredentials);
-        const [savedUser, savedPass] = decoded.split(':');
-        if (savedUser && savedPass) {
-          setUsername(savedUser);
-          setPassword(savedPass);
-        }
-      }
-    } catch (e) {
-      console.error('读取保存的凭据失败:', e);
-      localStorage.removeItem('saved_credentials');
-    }
-  }, [mode]);
 
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -217,11 +199,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
     try {
       const result = await onSendCode(username.trim(), email.trim());
       if (result.success) {
-        // 如果有返回验证码 (开发模式)，自动填充
-        if (result.code) {
-          setCode(result.code);
-        }
-
         setCountdown(60);
         const timer = setInterval(() => {
           setCountdown((prev) => {

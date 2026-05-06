@@ -739,18 +739,6 @@ function App() {
         setIsLoginOpen(false);
         setLoginLoading(false);
 
-        // 如果勾选了"记住我"，保存加密后的账号密码
-        if (rememberMe) {
-          try {
-            const credentials = btoa(`${username}:${password}`);
-            localStorage.setItem('saved_credentials', credentials);
-          } catch (e) {
-            console.error('保存凭据失败:', e);
-          }
-        } else {
-          localStorage.removeItem('saved_credentials');
-        }
-
         // 单独加载数据，失败不影响登录成功状态
         try {
           await fetchData();
@@ -836,17 +824,6 @@ function App() {
     } catch (error) {
       console.error('发送验证码失败:', error);
       return { success: false, message: '请求失败，请稍后重试' };
-    }
-  };
-
-  // 获取用户邮箱（用于自动回显）
-  const handleGetEmail = async (username: string) => {
-    try {
-      const result = await (api as any).getUserEmail(username);
-      return result;
-    } catch (error) {
-      console.error('获取邮箱失败:', error);
-      return null;
     }
   };
 
@@ -2418,7 +2395,6 @@ function App() {
           onRegister={handleRegister}
           onResetPassword={handleResetPassword}
           onSendCode={handleSendCode}
-          onGetEmail={handleGetEmail}
           loading={loginLoading}
           error={loginError}
           registerLoading={registerLoading}
