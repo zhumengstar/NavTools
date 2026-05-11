@@ -122,7 +122,7 @@ export class NavigationClient {
     };
 
     // Cookie 会自动包含在请求中，无需手动设置
-    console.log(`[API Request] ${options.method || 'GET'} ${this.baseUrl}/${endpoint}`, options.body ? `Payload: ${options.body}` : '');
+    console.log(`[API Request] ${options.method || 'GET'} ${this.baseUrl}/${endpoint}`);
 
     const response = await fetch(`${this.baseUrl}/${endpoint}`, {
       headers,

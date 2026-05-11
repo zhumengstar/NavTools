@@ -134,20 +134,25 @@ const SearchResultPanel: React.FC<SearchResultPanelProps> = ({
                       >
                         {result.type === 'site' ? (
                           result.icon ? (
-                            <Box
-                              component="img"
-                              src={result.icon}
-                              alt={result.name}
-                              sx={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                              }}
-                              onError={(e: any) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.parentElement.innerHTML = `<span>${result.name.charAt(0).toUpperCase()}</span>`;
-                              }}
-                            />
+                            <>
+                              <Box
+                                component="img"
+                                src={result.icon}
+                                alt={result.name}
+                                sx={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                }}
+                                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextElementSibling?.removeAttribute('hidden');
+                                }}
+                              />
+                              <Typography hidden variant="body2" fontWeight="bold">
+                                {result.name.charAt(0).toUpperCase()}
+                              </Typography>
+                            </>
                           ) : (
                             <Typography variant="body2" fontWeight="bold">
                               {result.name.charAt(0).toUpperCase()}

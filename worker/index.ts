@@ -27,6 +27,99 @@ const READ_ONLY_ROUTES = [
     { method: 'GET', path: '/api/groups-with-sites' },
 ] as const;
 
+const RATE_LIMIT_WINDOW_SECONDS = 10 * 60;
+const rateLimitMemory = new Map<string, { count: number; expiresAt: number }>();
+
+async function checkRateLimit(
+    request: Request,
+    env: Env,
+    action: string,
+    limit: number,
+    windowSeconds: number = RATE_LIMIT_WINDOW_SECONDS
+): Promise<{ allowed: boolean; retryAfter?: number }> {
+    const ip = getClientIp(request, env);
+    const key = `rate_limit:${action}:${ip}`;
+    const now = Math.floor(Date.now() / 1000);
+
+    if (env.KV) {
+        const current = await env.KV.get(key);
+        const count = current ? parseInt(current, 10) : 0;
+        if (count >= limit) {
+            return { allowed: false, retryAfter: windowSeconds };
+        }
+        await env.KV.put(key, String(count + 1), { expirationTtl: windowSeconds });
+        return { allowed: true };
+    }
+
+    const item = rateLimitMemory.get(key);
+    if (!item || item.expiresAt <= now) {
+        rateLimitMemory.set(key, { count: 1, expiresAt: now + windowSeconds });
+        return { allowed: true };
+    }
+
+    if (item.count >= limit) {
+        return { allowed: false, retryAfter: Math.max(1, item.expiresAt - now) };
+    }
+
+    item.count += 1;
+    return { allowed: true };
+}
+
+function isAllowedFetchUrl(value: string): boolean {
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        return false;
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return false;
+    }
+
+    if (parsed.username || parsed.password) {
+        return false;
+    }
+
+    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (!hostname || hostname === 'localhost' || hostname === 'metadata.google.internal') {
+        return false;
+    }
+
+    if (
+        hostname === '127.0.0.1' ||
+        hostname === '0.0.0.0' ||
+        hostname === '::1' ||
+        hostname === '169.254.169.254'
+    ) {
+        return false;
+    }
+
+    const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4) {
+        const parts = ipv4.slice(1).map(Number);
+        if (parts.some((part) => part < 0 || part > 255)) return false;
+        const a = parts[0] ?? 0;
+        const b = parts[1] ?? 0;
+        if (
+            a === 10 ||
+            a === 127 ||
+            (a === 172 && b >= 16 && b <= 31) ||
+            (a === 192 && b === 168) ||
+            (a === 169 && b === 254) ||
+            a === 0
+        ) {
+            return false;
+        }
+    }
+
+    if (/^(::1|fe80:|fc00:|fd00:)/i.test(hostname)) {
+        return false;
+    }
+
+    return true;
+}
+
 // 记录数据库初始化状态的倾向性尝试（不存储 Promise，避免跨请求 I/O 污染）
 let hasAttemptedInit = false;
 
@@ -322,6 +415,18 @@ export default {
                     // 登录路由 - 不需要验证
                     if (path === "login" && method === "POST") {
                         try {
+                            const rateLimit = await checkRateLimit(request, env, 'login', 20);
+                            if (!rateLimit.allowed) {
+                                return createJsonResponse(
+                                    { success: false, message: '请求过于频繁，请稍后再试' },
+                                    request,
+                                    {
+                                        status: 429,
+                                        headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                    }
+                                );
+                            }
+
 
 
                             const loginData = (await validateRequestBody(request)) as LoginInput;
@@ -406,10 +511,21 @@ export default {
                     // 注册路由 - 不需要验证，开放注册
                     if (path === "register" && method === "POST") {
                         try {
+                            const rateLimit = await checkRateLimit(request, env, 'register', 5);
+                            if (!rateLimit.allowed) {
+                                return createJsonResponse(
+                                    { success: false, message: '请求过于频繁，请稍后再试' },
+                                    request,
+                                    {
+                                        status: 429,
+                                        headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                    }
+                                );
+                            }
 
 
                             const registerData = (await validateRequestBody(request)) as RegisterInput;
-                            console.log('[DEBUG] Worker received register data:', JSON.stringify(registerData));
+                            console.log('[DEBUG] Worker received register request:', { username: registerData.username, email: registerData.email });
 
                             const validation = validateRegister(registerData);
                             if (!validation.valid) {
@@ -442,6 +558,18 @@ export default {
                     // 密码重置路由 - 不需要验证，任何人可遍以重置
                     if (path === "reset-password" && method === "POST") {
                         try {
+                            const rateLimit = await checkRateLimit(request, env, 'reset-password', 8);
+                            if (!rateLimit.allowed) {
+                                return createJsonResponse(
+                                    { success: false, message: '请求过于频繁，请稍后再试' },
+                                    request,
+                                    {
+                                        status: 429,
+                                        headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                    }
+                                );
+                            }
+
                             const resetData = (await validateRequestBody(request)) as ResetPasswordRequest;
 
                             // 验证校验由 NavigationAPI 处理
@@ -464,6 +592,18 @@ export default {
                     // 发送验证码路由
                     if (path === "auth/send-code" && method === "POST") {
                         try {
+                            const rateLimit = await checkRateLimit(request, env, 'send-code', 5);
+                            if (!rateLimit.allowed) {
+                                return createJsonResponse(
+                                    { success: false, message: '请求过于频繁，请稍后再试' },
+                                    request,
+                                    {
+                                        status: 429,
+                                        headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                    }
+                                );
+                            }
+
                             const sendCodeData = (await validateRequestBody(request)) as SendCodeRequest;
                             const result = await api.sendResetCode(sendCodeData, env);
                             return createJsonResponse(result, request, {
@@ -484,6 +624,18 @@ export default {
                     // 获取用户邮箱路由 (用于重置密码)
                     if (path === "auth/email" && method === "GET") {
                         try {
+                            const rateLimit = await checkRateLimit(request, env, 'auth-email', 20);
+                            if (!rateLimit.allowed) {
+                                return createJsonResponse(
+                                    { success: false, message: '请求过于频繁，请稍后再试' },
+                                    request,
+                                    {
+                                        status: 429,
+                                        headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                    }
+                                );
+                            }
+
                             const url = new URL(request.url);
                             const username = url.searchParams.get("username");
 
@@ -1048,6 +1200,18 @@ export default {
                         const result = await env.DB.prepare(query).bind(...params).all();
                         return createJsonResponse(result.results || [], request);
                     } else if (path === "auth/login" && method === "POST") {
+                        const rateLimit = await checkRateLimit(request, env, 'login', 20);
+                        if (!rateLimit.allowed) {
+                            return createJsonResponse(
+                                { success: false, message: '请求过于频繁，请稍后再试' },
+                                request,
+                                {
+                                    status: 429,
+                                    headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                }
+                            );
+                        }
+
                         const data = (await validateRequestBody(request)) as LoginRequest;
                         const result = await api.login(data);
 
@@ -1073,6 +1237,18 @@ export default {
                         await api.initDB();
                         return createJsonResponse({ success: true, message: "数据库初始化/迁移完成" }, request);
                     } else if (path === "auth/register" && method === "POST") {
+                        const rateLimit = await checkRateLimit(request, env, 'register', 5);
+                        if (!rateLimit.allowed) {
+                            return createJsonResponse(
+                                { success: false, message: '请求过于频繁，请稍后再试' },
+                                request,
+                                {
+                                    status: 429,
+                                    headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                }
+                            );
+                        }
+
                         const data = (await validateRequestBody(request)) as RegisterRequest;
 
                         // 验证注册数据
@@ -1095,6 +1271,18 @@ export default {
                         const result = await api.register(data);
                         return createJsonResponse(result, request);
                     } else if (path === "auth/email" && method === "GET") {
+                        const rateLimit = await checkRateLimit(request, env, 'auth-email', 20);
+                        if (!rateLimit.allowed) {
+                            return createJsonResponse(
+                                { success: false, message: '请求过于频繁，请稍后再试' },
+                                request,
+                                {
+                                    status: 429,
+                                    headers: { 'Retry-After': String(rateLimit.retryAfter || RATE_LIMIT_WINDOW_SECONDS) },
+                                }
+                            );
+                        }
+
                         // 获取用户邮箱（用于密码重置回显）
                         const username = url.searchParams.get("username");
                         if (!username) {
@@ -1593,6 +1781,10 @@ export default {
                             return createJsonResponse({ success: false, message: "参数 url 不能为空" }, request, { status: 400 });
                         }
 
+                        if (!isAllowedFetchUrl(targetUrl)) {
+                            return createJsonResponse({ success: false, message: "不允许抓取该 URL" }, request, { status: 400 });
+                        }
+
                         try {
                             let fetchResponse;
                             if (!isSilent) console.log(`[Fetch Info] Attempting to fetch: ${targetUrl}`);
@@ -1613,6 +1805,16 @@ export default {
 
                             if (!fetchResponse.ok) {
                                 return createJsonResponse({ success: false, deadLink: fetchResponse.status >= 400 && fetchResponse.status < 600 }, request);
+                            }
+
+                            const contentLength = fetchResponse.headers.get('Content-Length');
+                            if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+                                return createJsonResponse({ success: false, message: "响应内容过大" }, request, { status: 413 });
+                            }
+
+                            const contentType = fetchResponse.headers.get('Content-Type') || '';
+                            if (contentType && !/(text\/html|application\/xhtml\+xml|application\/xml|text\/xml)/i.test(contentType)) {
+                                return createJsonResponse({ success: false, message: "不支持的响应类型" }, request, { status: 415 });
                             }
 
                             let title = "";
@@ -1684,6 +1886,11 @@ export default {
 
                                 // 如果启用了补全或死链检查
                                 if ((autoComplete || autoClean) && site.url) {
+                                    if (!isAllowedFetchUrl(site.url)) {
+                                        results.push({ id, success: false, deadLink: false });
+                                        continue;
+                                    }
+
                                     try {
                                         const fetchResponse = await fetch(site.url, {
                                             headers: {
@@ -1786,6 +1993,9 @@ export default {
                                     const targetUrl = site.url;
                                     if (!targetUrl) {
                                         return { id: siteId, success: false, message: "站点URL为空" };
+                                    }
+                                    if (!isAllowedFetchUrl(targetUrl)) {
+                                        return { id: siteId, success: false, message: "不允许抓取该 URL" };
                                     }
 
                                     let fetchResponse;
