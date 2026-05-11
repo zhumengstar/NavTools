@@ -134,6 +134,8 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import ViewQuiltIcon from '@mui/icons-material/ViewQuilt';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
 import RecommendIcon from '@mui/icons-material/Recommend';
+import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 // 根据环境选择使用真实API还是模拟API
 // @cloudflare/vite-plugin 在 npm run dev 时自动代理 Worker + 本地 D1
@@ -476,6 +478,7 @@ function App() {
   const [openAddGroup, setOpenAddGroup] = useState(false);
   const [openAddSite, setOpenAddSite] = useState(false);
   const [creatingSite, setCreatingSite] = useState(false); // 防止重复点击创建
+  const quickAddProcessedRef = useRef<string | null>(null);
   // newGroup state moved to AddGroupDialog
   const [newSite, setNewSite] = useState<Partial<Site>>({
     name: '',
@@ -1044,6 +1047,32 @@ function App() {
   const handleCloseSnackbar = useCallback(() => {
     setSnackbarOpen(false);
   }, []);
+
+  const clearQuickAddParams = useCallback(() => {
+    const nextUrl = new URL(window.location.href);
+    ['quickAdd', 'url', 'title', 'description', 'groupId'].forEach((key) => {
+      nextUrl.searchParams.delete(key);
+    });
+
+    const cleanUrl = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+    window.history.replaceState(null, document.title, cleanUrl);
+  }, []);
+
+  const quickAddBookmarklet = useMemo(() => {
+    const appUrl = `${window.location.origin}${window.location.pathname}`;
+
+    return `javascript:(()=>{const u=encodeURIComponent(location.href);const t=encodeURIComponent(document.title||'');const d=encodeURIComponent(String(getSelection&&getSelection()||'').slice(0,500));window.open(${JSON.stringify(appUrl)}+'?quickAdd=1&url='+u+'&title='+t+'&description='+d,'_blank','noopener');})()`;
+  }, []);
+
+  const handleCopyBookmarklet = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(quickAddBookmarklet);
+      handleSuccess('书签小工具代码已复制');
+    } catch (error) {
+      console.error('复制书签小工具失败:', error);
+      handleError('复制失败，请手动拖拽按钮到书签栏');
+    }
+  }, [handleError, handleSuccess, quickAddBookmarklet]);
 
   // 后台静默自动维护（补全信息及清理死链）
   const scavengeSiteInfo = useCallback(async () => {
@@ -1724,6 +1753,92 @@ function App() {
 
     setOpenAddSite(true);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('quickAdd') !== '1') return;
+
+    const requestKey = window.location.search;
+    if (quickAddProcessedRef.current === requestKey) return;
+
+    if (!isAuthenticated) {
+      if (quickAddProcessedRef.current !== `login:${requestKey}`) {
+        quickAddProcessedRef.current = `login:${requestKey}`;
+        setIsLoginOpen(true);
+      }
+      return;
+    }
+
+    if (!isInitialDataLoaded) return;
+
+    const rawUrl = (params.get('url') || '').trim();
+    const finishQuickAdd = () => {
+      quickAddProcessedRef.current = requestKey;
+      clearQuickAddParams();
+    };
+
+    if (!rawUrl) {
+      finishQuickAdd();
+      handleError('缺少要保存的网页链接');
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      finishQuickAdd();
+      handleError('网页链接格式不正确');
+      return;
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      finishQuickAdd();
+      handleError('只能保存 http 或 https 网页');
+      return;
+    }
+
+    const requestedGroupId = Number(params.get('groupId'));
+    const targetGroup = Number.isInteger(requestedGroupId)
+      ? groups.find((group) => group.id === requestedGroupId) || groups[0]
+      : groups[0];
+
+    if (!targetGroup) {
+      finishQuickAdd();
+      handleError('请先创建一个分组，再保存网页');
+      return;
+    }
+
+    const maxOrderNum = targetGroup.sites.length
+      ? Math.max(...targetGroup.sites.map((site) => site.order_num || 0)) + 1
+      : 0;
+    const domain = extractDomain(parsedUrl.href) || '';
+    const iconTemplate = configs['site.iconApi'] || DEFAULT_CONFIGS['site.iconApi'];
+    const title = (params.get('title') || '').trim();
+    const description = (params.get('description') || '').trim();
+
+    setNewSite({
+      name: (title || domain).slice(0, 120),
+      url: parsedUrl.href,
+      icon: domain ? iconTemplate.replace('{domain}', domain) : '',
+      description: description.slice(0, 500),
+      notes: '',
+      group_id: targetGroup.id,
+      order_num: maxOrderNum,
+      is_public: 1,
+    });
+    setOpenAddSite(true);
+    finishQuickAdd();
+    handleSuccess('已载入网页信息，可确认保存');
+  }, [
+    clearQuickAddParams,
+    configs,
+    groups,
+    handleError,
+    handleSuccess,
+    isAuthenticated,
+    isInitialDataLoaded,
+  ]);
 
   const handleCloseAddSite = () => {
     if (creatingSite) {
@@ -3280,6 +3395,37 @@ function App() {
                       value={tempConfigs['site.name']}
                       onChange={handleConfigInputChange}
                     />
+
+                    <Box sx={{ mb: 1, mt: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                      <Typography variant='subtitle1' gutterBottom>
+                        快速收藏网页
+                      </Typography>
+                      <Typography variant='body2' color='text.secondary' sx={{ mb: 1.5 }}>
+                        将按钮拖到浏览器书签栏，在其他网页点击它即可回到 NavTools 保存当前页面。
+                      </Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                        <Button
+                          component='a'
+                          href={quickAddBookmarklet}
+                          draggable
+                          onClick={(event) => event.preventDefault()}
+                          variant='contained'
+                          startIcon={<BookmarkAddIcon />}
+                          sx={{ justifyContent: 'center' }}
+                        >
+                          保存到 NavTools
+                        </Button>
+                        <Tooltip title='复制书签小工具代码'>
+                          <IconButton
+                            aria-label='复制书签小工具代码'
+                            onClick={handleCopyBookmarklet}
+                            sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
+                          >
+                            <ContentCopyIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Box>
 
                     {/* UI Style Toggle */}
                     <Box sx={{ mb: 1, mt: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
