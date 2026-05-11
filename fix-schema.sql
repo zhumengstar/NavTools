@@ -4,6 +4,8 @@
 -- 1. 修复 sites 表的 is_deleted 字段
 ALTER TABLE sites ADD COLUMN is_deleted INTEGER DEFAULT 0;
 ALTER TABLE sites ADD COLUMN deleted_at TIMESTAMP;
+ALTER TABLE sites ADD COLUMN login_username TEXT;
+ALTER TABLE sites ADD COLUMN login_password_cipher TEXT;
 
 -- 2. 修复 groups 表的 is_deleted 字段
 ALTER TABLE groups ADD COLUMN is_deleted INTEGER DEFAULT 0;

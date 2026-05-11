@@ -63,6 +63,18 @@ const loadFromCache = (key: string) => {
   }
 };
 
+const stripCredentialSecretsFromGroups = (data: GroupWithSites[]): GroupWithSites[] => {
+  return data.map((group) => ({
+    ...group,
+    sites: Array.isArray(group.sites)
+      ? group.sites.map((site) => {
+        const { login_password: _loginPassword, ...safeSite } = site;
+        return safeSite;
+      })
+      : group.sites,
+  }));
+};
+
 import {
   DndContext,
   closestCenter,
@@ -486,6 +498,8 @@ function App() {
     icon: '',
     description: '',
     notes: '',
+    login_username: '',
+    login_password: '',
     order_num: 0,
     group_id: 0,
     is_public: 1, // 默认为公开
@@ -648,7 +662,9 @@ function App() {
         // 已认证情况下，尝试从缓存快速加载数据以实现 Early SWR
         const cachedData = loadFromCache(CACHE_DATA_KEY);
         if (cachedData && groups.length === 0) {
-          setGroups(cachedData);
+          const safeCachedData = stripCredentialSecretsFromGroups(cachedData);
+          setGroups(safeCachedData);
+          saveToCache(CACHE_DATA_KEY, safeCachedData);
           setIsInitialDataLoaded(true); // 额外确保栅栏开启
         }
 
@@ -925,7 +941,9 @@ function App() {
             }))
             .sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0));
 
-          setGroups(filteredCache);
+          const safeFilteredCache = stripCredentialSecretsFromGroups(filteredCache);
+          setGroups(safeFilteredCache);
+          saveToCache(CACHE_DATA_KEY, safeFilteredCache);
           // 有缓存数据时，不显示 loading 骨架屏，直接显示缓存内容
           setLoading(false);
           setIsInitialDataLoaded(true); // 提前开启栅栏，让用户看到缓存数据
@@ -1197,7 +1215,7 @@ function App() {
             sites: (g.sites || []).filter((s: any) => Number(s.is_deleted) !== 1 && !s.deleted_at)
           }));
 
-        saveToCache(CACHE_DATA_KEY, cleanDataForCache);
+        saveToCache(CACHE_DATA_KEY, stripCredentialSecretsFromGroups(cleanDataForCache));
         saveToCache(CACHE_CONFIG_KEY, userConfigs);
       }
     } catch (error) {
@@ -1746,6 +1764,8 @@ function App() {
       icon: '',
       description: '',
       notes: '',
+      login_username: '',
+      login_password: '',
       group_id: groupId,
       order_num: maxOrderNum,
       is_public: 1, // 默认为公开
@@ -1823,6 +1843,8 @@ function App() {
       icon: domain ? iconTemplate.replace('{domain}', domain) : '',
       description: description.slice(0, 500),
       notes: '',
+      login_username: '',
+      login_password: '',
       group_id: targetGroup.id,
       order_num: maxOrderNum,
       is_public: 1,
@@ -2054,7 +2076,10 @@ function App() {
           order_num: group.order_num,
         })),
         // 站点数据作为单独的顶级数组
-        sites: allSites,
+        sites: allSites.map((site) => {
+          const { login_password: _loginPassword, ...safeSite } = site;
+          return safeSite;
+        }),
         configs: configs,
         // 添加版本和导出日期
         version: '1.0',
@@ -2328,7 +2353,7 @@ function App() {
             // 步骤 3: 用数据库返回的真实数据（含真实 ID）替换乐观数据，并同步缓存
             setGroups(prev => {
               const updated = prev.map(g => g.id === tempGroupData.id ? targetGroup! : g);
-              saveToCache(CACHE_DATA_KEY, updated);
+              saveToCache(CACHE_DATA_KEY, stripCredentialSecretsFromGroups(updated));
               return updated;
             });
             setVisibleGroupsCount(prev => Math.max(prev, workingGroups.length));
@@ -2455,7 +2480,7 @@ function App() {
             if (g.sites) g.sites.sort((a: any, b: any) => (a.order_num || 0) - (b.order_num || 0));
           });
           setGroups(sorted);
-          saveToCache(CACHE_DATA_KEY, sorted);
+          saveToCache(CACHE_DATA_KEY, stripCredentialSecretsFromGroups(sorted));
           // 同步 workingGroups 以便下一个分组查重准确
           workingGroups = sorted;
           // 重新计算 nextGroupOrder
@@ -3299,6 +3324,41 @@ function App() {
                     />
 
                     {/* 公开/私密开关 */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: 2,
+                        flexDirection: { xs: 'column', sm: 'row' },
+                      }}
+                    >
+                      <TextField
+                        margin='dense'
+                        id='site-login-username'
+                        name='login_username'
+                        label='登录账号'
+                        type='text'
+                        fullWidth
+                        variant='outlined'
+                        value={newSite.login_username || ''}
+                        onChange={handleSiteInputChange}
+                        disabled={creatingSite}
+                        autoComplete='off'
+                      />
+                      <TextField
+                        margin='dense'
+                        id='site-login-password'
+                        name='login_password'
+                        label='登录密码'
+                        type='password'
+                        fullWidth
+                        variant='outlined'
+                        value={newSite.login_password || ''}
+                        onChange={handleSiteInputChange}
+                        disabled={creatingSite}
+                        autoComplete='new-password'
+                        helperText='密码会由后端加密保存'
+                      />
+                    </Box>
                     <FormControlLabel
                       control={
                         <Switch
@@ -3949,7 +4009,7 @@ function App() {
 
 
           <SiteSettingsModal
-            site={siteToSettings || { id: 0, name: '', url: '', group_id: 0, order_num: 0, is_public: 1, icon: '', description: '', notes: '' }}
+            site={siteToSettings || { id: 0, name: '', url: '', group_id: 0, order_num: 0, is_public: 1, icon: '', description: '', notes: '', login_username: '', login_password: '' }}
             open={isSettingsOpen}
             onUpdate={(updated) => {
               handleSiteUpdate(updated);

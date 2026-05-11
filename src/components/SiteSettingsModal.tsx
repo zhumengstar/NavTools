@@ -33,6 +33,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 interface SiteSettingsModalProps {
   site: Site;
@@ -66,6 +69,8 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
     icon: site.icon || '',
     description: site.description || '',
     notes: site.notes || '',
+    login_username: site.login_username || '',
+    login_password: site.login_password || '',
     group_id: String(site.group_id),
     is_public: site.is_public ?? 1, // 默认为公开
     is_featured: site.is_featured ?? 0,
@@ -73,6 +78,7 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
 
   // 用于预览图标
   const [iconPreview, setIconPreview] = useState<string | null>(site.icon || null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // 当外部 site 属性更新时（或者弹窗打开时），同步内部表单状态
   useEffect(() => {
@@ -83,6 +89,8 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
         icon: site.icon || '',
         description: site.description || '',
         notes: site.notes || '',
+        login_username: site.login_username || '',
+        login_password: site.login_password || '',
         group_id: String(site.group_id),
         is_public: site.is_public ?? 1,
         is_featured: site.is_featured ?? 0,
@@ -99,6 +107,11 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCopyPassword = async () => {
+    if (!formData.login_password) return;
+    await navigator.clipboard.writeText(formData.login_password);
   };
 
   // 处理下拉列表变化
@@ -486,6 +499,56 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
             />
 
             {/* 公开/私密开关、精选开关与上次访问时间展示 */}
+            <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <TextField
+                id='login_username'
+                name='login_username'
+                label='登录账号'
+                fullWidth
+                value={formData.login_username || ''}
+                onChange={handleChange}
+                placeholder='可选'
+                variant='outlined'
+                size='small'
+                autoComplete='off'
+              />
+              <TextField
+                id='login_password'
+                name='login_password'
+                label='登录密码'
+                fullWidth
+                value={formData.login_password || ''}
+                onChange={handleChange}
+                placeholder='可选'
+                variant='outlined'
+                size='small'
+                type={showPassword ? 'text' : 'password'}
+                autoComplete='new-password'
+                helperText='密码会由后端加密保存'
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position='end'>
+                      <IconButton
+                        aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                        onClick={() => setShowPassword((value) => !value)}
+                        edge='end'
+                      >
+                        {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                      </IconButton>
+                      <IconButton
+                        aria-label='复制密码'
+                        onClick={handleCopyPassword}
+                        disabled={!formData.login_password}
+                        edge='end'
+                      >
+                        <ContentCopyIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                 <FormControlLabel

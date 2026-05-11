@@ -1160,13 +1160,19 @@ export default {
                     // 站点相关API
                     else if (path === "sites" && method === "GET") {
                         // 根据认证状态过滤查询
+                        const groupId = url.searchParams.get("groupId");
+
+                        if (isAuthenticated && currentUserId !== undefined) {
+                            const sites = await api.getSites(groupId ? parseInt(groupId) : undefined, currentUserId);
+                            return createJsonResponse(sites, request);
+                        }
+
                         let query = `
-                        SELECT s.*
+                        SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at
                         FROM sites s
                         INNER JOIN groups g ON s.group_id = g.id
                     `;
 
-                        const groupId = url.searchParams.get("groupId");
                         const conditions: string[] = [];
                         const params: (string | number)[] = [];
 
@@ -2838,6 +2844,8 @@ interface SiteInput {
     icon?: string;
     description?: string;
     notes?: string;
+    login_username?: string;
+    login_password?: string;
     order_num?: number;
     is_public?: number;
     is_featured?: number;
@@ -3019,6 +3027,20 @@ function validateSite(data: SiteInput): {
     }
 
     // 验证排序号
+    if (data.login_username !== undefined) {
+        sanitizedData.login_username =
+            typeof data.login_username === "string"
+                ? data.login_username.trim().slice(0, 200)
+                : "";
+    }
+
+    if (data.login_password !== undefined) {
+        sanitizedData.login_password =
+            typeof data.login_password === "string"
+                ? data.login_password.slice(0, 1000)
+                : "";
+    }
+
     if (data.order_num === undefined || typeof data.order_num !== "number") {
         errors.push("排序号必须是数字");
     } else {

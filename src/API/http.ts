@@ -60,6 +60,8 @@ export interface Site {
   icon: string;
   description: string;
   notes: string;
+  login_username?: string;
+  login_password?: string;
   order_num: number;
   is_public?: number; // 0 = 私密（仅管理员可见），1 = 公开（访客可见）
   last_clicked_at?: string; // 上次点击时间
@@ -72,6 +74,8 @@ export interface Site {
 }
 
 // 分组及其站点 (用于优化 N+1 查询)
+type SiteRow = Site & { login_password_cipher?: string | null };
+
 export interface GroupWithSites extends Group {
   id: number; // 确保 id 存在
   sites: Site[];
@@ -210,6 +214,103 @@ export class NavigationAPI {
     return !this.authEnabled || this.secret.trim().length >= 32;
   }
 
+  private hasCredentialEncryptionSecret(): boolean {
+    return this.secret.trim().length >= 32;
+  }
+
+  private bytesToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  private base64ToBytes(value: string): Uint8Array {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  private async getCredentialEncryptionKey(): Promise<CryptoKey> {
+    if (!this.hasCredentialEncryptionSecret()) {
+      throw new Error('AUTH_SECRET 未配置或长度不足，无法加密保存书签密码');
+    }
+
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.digest(
+      'SHA-256',
+      encoder.encode(`navtools-site-credentials:${this.secret}`)
+    );
+
+    return crypto.subtle.importKey('raw', keyMaterial, { name: 'AES-GCM' }, false, [
+      'encrypt',
+      'decrypt',
+    ]);
+  }
+
+  private async encryptSitePassword(password?: string | null): Promise<string> {
+    if (!password) return '';
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await this.getCredentialEncryptionKey();
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      new TextEncoder().encode(password)
+    );
+    const cipherBytes = new Uint8Array(encrypted);
+    const payload = new Uint8Array(iv.length + cipherBytes.length);
+    payload.set(iv, 0);
+    payload.set(cipherBytes, iv.length);
+
+    return `v1:${this.bytesToBase64(payload)}`;
+  }
+
+  private async decryptSitePassword(cipher?: string | null): Promise<string> {
+    if (!cipher) return '';
+    if (!cipher.startsWith('v1:')) return '';
+    if (!this.hasCredentialEncryptionSecret()) return '';
+
+    try {
+      const payload = this.base64ToBytes(cipher.slice(3));
+      const iv = payload.slice(0, 12);
+      const encrypted = payload.slice(12);
+      const key = await this.getCredentialEncryptionKey();
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
+      return new TextDecoder().decode(decrypted);
+    } catch (error) {
+      console.warn('解密书签密码失败:', error);
+      return '';
+    }
+  }
+
+  private async exposeSiteCredentials(
+    site: SiteRow | null,
+    includeCredentials: boolean
+  ): Promise<Site | null> {
+    if (!site) return null;
+
+    const cipher = site.login_password_cipher;
+    const publicSite: Site = { ...site };
+    delete (publicSite as SiteRow).login_password_cipher;
+
+    if (includeCredentials) {
+      publicSite.login_username = site.login_username || '';
+      publicSite.login_password = await this.decryptSitePassword(cipher);
+    } else {
+      delete publicSite.login_username;
+      delete publicSite.login_password;
+    }
+
+    return publicSite;
+  }
+
   // 初始化数据库表
   // 修改initDB方法，将SQL语句分开执行
   async initDB(): Promise<{ success: boolean; alreadyInitialized: boolean }> {
@@ -292,7 +393,7 @@ export class NavigationAPI {
 
     // 再创建sites表
     await this.db.exec(
-      `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, icon TEXT, description TEXT, notes TEXT, order_num INTEGER NOT NULL, is_public INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE);`
+      `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, icon TEXT, description TEXT, notes TEXT, login_username TEXT, login_password_cipher TEXT, order_num INTEGER NOT NULL, is_public INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE);`
     );
 
     // 创建配置表
@@ -376,6 +477,20 @@ export class NavigationAPI {
     }
 
     // 数据库迁移：创建 user_quotas 表
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN login_username TEXT");
+      console.log('Migrated: Added login_username column to sites table');
+    } catch (e) {
+      // 字段可能已存在
+    }
+
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN login_password_cipher TEXT");
+      console.log('Migrated: Added login_password_cipher column to sites table');
+    } catch (e) {
+      // 字段可能已存在
+    }
+
     try {
       await this.db.exec(`CREATE TABLE IF NOT EXISTS user_quotas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1178,7 +1293,7 @@ export class NavigationAPI {
   // 网站相关 API
   async getSites(groupId?: number, userId?: number): Promise<Site[]> {
     let query = `
-      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at 
+      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.login_username, s.login_password_cipher, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at
       FROM sites s
     `;
 
@@ -1200,8 +1315,11 @@ export class NavigationAPI {
     const result = await this.db
       .prepare(query)
       .bind(...params)
-      .all<Site>();
-    return result.results || [];
+      .all<SiteRow>();
+    const sites = await Promise.all(
+      (result.results || []).map((site) => this.exposeSiteCredentials(site, userId !== undefined))
+    );
+    return sites.filter((site): site is Site => site !== null);
   }
 
   /**
@@ -1250,6 +1368,8 @@ export class NavigationAPI {
         s.icon as site_icon,
         s.description as site_description,
         s.notes as site_notes,
+        s.login_username as site_login_username,
+        s.login_password_cipher as site_login_password_cipher,
         s.order_num as site_order,
         s.is_public as site_is_public,
         s.is_deleted as site_is_deleted,
@@ -1281,6 +1401,8 @@ export class NavigationAPI {
       site_icon: string | null;
       site_description: string | null;
       site_notes: string | null;
+      site_login_username: string | null;
+      site_login_password_cipher: string | null;
       site_order: number | null;
       site_is_public?: number;
       site_is_deleted?: number;
@@ -1315,7 +1437,7 @@ export class NavigationAPI {
       // 如果有站点数据,添加到分组的 sites 数组
       if (row.site_id !== null) {
         const group = groupsMap.get(row.group_id)!;
-        group.sites.push({
+        const site = await this.exposeSiteCredentials({
           id: row.site_id,
           group_id: row.group_id,
           name: row.site_name!,
@@ -1323,6 +1445,8 @@ export class NavigationAPI {
           icon: row.site_icon || '',
           description: row.site_description || '',
           notes: row.site_notes || '',
+          login_username: row.site_login_username || '',
+          login_password_cipher: row.site_login_password_cipher,
           is_featured: row.site_is_featured || 0,
           order_num: row.site_order!,
           is_public: row.site_is_public,
@@ -1331,7 +1455,8 @@ export class NavigationAPI {
           last_clicked_at: row.site_last_clicked_at || undefined,
           created_at: row.site_created_at!,
           updated_at: row.site_updated_at!,
-        });
+        }, userId !== undefined);
+        if (site) group.sites.push(site);
       }
     }
 
@@ -1477,11 +1602,11 @@ export class NavigationAPI {
     const params = userId !== undefined ? [id, userId] : [id];
     const result = await this.db
       .prepare(
-        `SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at, g.user_id as user_id FROM sites s JOIN groups g ON s.group_id = g.id WHERE s.id = ?${ownerWhere}`
+        `SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.login_username, s.login_password_cipher, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at, g.user_id as user_id FROM sites s JOIN groups g ON s.group_id = g.id WHERE s.id = ?${ownerWhere}`
       )
       .bind(...params)
-      .first<Site>();
-    return result;
+      .first<SiteRow>();
+    return this.exposeSiteCredentials(result, userId !== undefined);
   }
 
   async createSite(site: Site, userId?: number): Promise<Site> {
@@ -1498,25 +1623,33 @@ export class NavigationAPI {
     // 2. 局部查重：检查该分组下是否已存在该 URL
     const existingSite = await this.getSiteByGroupIdAndUrl(site.group_id, trimmedUrl);
     if (existingSite) {
-      return existingSite;
+      return userId !== undefined && existingSite.id
+        ? (await this.getSite(existingSite.id, userId)) || existingSite
+        : existingSite;
     }
 
     // 3. 规范化后再次检查 (针对末尾斜杠差异)
     if (normalizedUrl !== trimmedUrl) {
       const existingNormalizedSite = await this.getSiteByGroupIdAndUrl(site.group_id, normalizedUrl);
       if (existingNormalizedSite) {
-        return existingNormalizedSite;
+        return userId !== undefined && existingNormalizedSite.id
+          ? (await this.getSite(existingNormalizedSite.id, userId)) || existingNormalizedSite
+          : existingNormalizedSite;
       }
     }
 
     const icon = site.icon || this.getIconFromUrl(site.url);
+    const loginUsername = (site.login_username || '').trim().slice(0, 200);
+    const encryptedPassword = await this.encryptSitePassword(
+      typeof site.login_password === 'string' ? site.login_password.slice(0, 1000) : ''
+    );
 
     const result = await this.db
       .prepare(
         `
-      INSERT INTO sites (group_id, name, url, icon, description, notes, order_num, is_public)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      RETURNING id, group_id, name, url, icon, description, notes, order_num, is_public, last_clicked_at, created_at, updated_at
+      INSERT INTO sites (group_id, name, url, icon, description, notes, login_username, login_password_cipher, order_num, is_public)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id, group_id, name, url, icon, description, notes, login_username, login_password_cipher, order_num, is_public, last_clicked_at, created_at, updated_at
     `
       )
       .bind(
@@ -1526,10 +1659,12 @@ export class NavigationAPI {
         icon,
         site.description || '',
         site.notes || '',
+        loginUsername,
+        encryptedPassword,
         site.order_num,
         site.is_public ?? 1
       )
-      .all<Site>();
+      .all<SiteRow>();
 
     if (!result.results || result.results.length === 0) {
       throw new Error('创建站点失败');
@@ -1538,7 +1673,7 @@ export class NavigationAPI {
     if (!createdSite) {
       throw new Error('创建站点失败');
     }
-    return createdSite;
+    return (await this.exposeSiteCredentials(createdSite, userId !== undefined)) || createdSite;
   }
 
   async updateSite(id: number, site: Partial<Site>, userId?: number): Promise<Site | null> {
@@ -1562,6 +1697,8 @@ export class NavigationAPI {
       'icon',
       'description',
       'notes',
+      'login_username',
+      'login_password_cipher',
       'order_num',
       'is_public',
       'is_featured',
@@ -1572,7 +1709,21 @@ export class NavigationAPI {
     const params: (string | number)[] = [];
 
     // 只允许更新白名单中的字段
-    Object.entries(site).forEach(([key, value]) => {
+    const siteUpdates: Partial<Site> & { login_password_cipher?: string } = { ...site };
+    delete siteUpdates.login_password_cipher;
+    if (Object.prototype.hasOwnProperty.call(siteUpdates, 'login_password')) {
+      const password =
+        typeof siteUpdates.login_password === 'string'
+          ? siteUpdates.login_password.slice(0, 1000)
+          : '';
+      siteUpdates.login_password_cipher = await this.encryptSitePassword(password);
+      delete siteUpdates.login_password;
+    }
+    if (siteUpdates.login_username !== undefined) {
+      siteUpdates.login_username = siteUpdates.login_username.trim().slice(0, 200);
+    }
+
+    Object.entries(siteUpdates).forEach(([key, value]) => {
       if (ALLOWED_FIELDS.includes(key as AllowedField) && value !== undefined) {
         updates.push(`${key} = ?`);
         params.push(value);
@@ -1589,26 +1740,31 @@ export class NavigationAPI {
     // 构建安全的参数化查询
     const query = `UPDATE sites SET ${updates.join(
       ', '
-    )} WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''} RETURNING id, group_id, name, url, icon, description, notes, order_num, is_public, is_featured, created_at, updated_at`;
+    )} WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''} RETURNING id, group_id, name, url, icon, description, notes, login_username, login_password_cipher, order_num, is_public, is_featured, created_at, updated_at`;
     params.push(id);
     if (userId !== undefined) params.push(userId);
 
     const result = await this.db
       .prepare(query)
       .bind(...params)
-      .all<Site>();
+      .all<SiteRow>();
 
     if (!result.results || result.results.length === 0) {
       return null;
     }
     const updatedSite = result.results[0];
-    return updatedSite || null;
+    return this.exposeSiteCredentials(updatedSite || null, userId !== undefined);
   }
 
   // 根据 ID 获取站点
   async getSiteById(id: number): Promise<Site | null> {
-    const site = await this.db.prepare('SELECT * FROM sites WHERE id = ?').bind(id).first<Site>();
-    return site || null;
+    const site = await this.db.prepare(`
+      SELECT id, group_id, name, url, icon, description, notes, login_username, login_password_cipher,
+        order_num, is_public, is_featured, last_clicked_at, created_at, updated_at
+      FROM sites
+      WHERE id = ?
+    `).bind(id).first<SiteRow>();
+    return this.exposeSiteCredentials(site || null, false);
   }
 
   async deleteSite(id: number, userId?: number): Promise<boolean> {
@@ -1650,20 +1806,22 @@ export class NavigationAPI {
 
   // Restore site
   async restoreSite(id: number, userId?: number): Promise<Site | null> {
-    const query = `UPDATE sites SET is_deleted = 0, deleted_at = NULL WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''} RETURNING *`;
+    const query = `UPDATE sites SET is_deleted = 0, deleted_at = NULL WHERE id = ?${userId !== undefined ? ' AND EXISTS (SELECT 1 FROM groups g WHERE g.id = sites.group_id AND g.user_id = ?)' : ''} RETURNING id, group_id, name, url, icon, description, notes, login_username, login_password_cipher, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at`;
     const params = userId !== undefined ? [id, userId] : [id];
     const result = await this.db
       .prepare(query)
       .bind(...params)
-      .first<Site>();
-    return result || null;
+      .first<SiteRow>();
+    return this.exposeSiteCredentials(result || null, userId !== undefined);
   }
 
   // Get trash sites
   async getTrashSites(userId?: number): Promise<Site[]> {
     console.log(`[DEBUG] getTrashSites called for userId: ${userId}`);
     let query = `
-      SELECT s.*
+      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes,
+        s.login_username, s.login_password_cipher, s.order_num, s.is_public,
+        s.is_featured, s.last_clicked_at, s.created_at, s.updated_at
       FROM sites s
       JOIN groups g ON s.group_id = g.id
       WHERE s.is_deleted = 1
@@ -1678,9 +1836,12 @@ export class NavigationAPI {
     query += ' ORDER BY s.deleted_at DESC';
 
     try {
-      const result = await this.db.prepare(query).bind(...params).all<Site>();
+      const result = await this.db.prepare(query).bind(...params).all<SiteRow>();
       console.log(`[DEBUG] getTrashSites result count: ${result.results?.length}`);
-      return result.results || [];
+      const sites = await Promise.all(
+        (result.results || []).map((site) => this.exposeSiteCredentials(site, userId !== undefined))
+      );
+      return sites.filter((site): site is Site => site !== null);
     } catch (error) {
       console.error('[ERROR] getTrashSites failed:', error);
       return [];
@@ -1838,7 +1999,10 @@ export class NavigationAPI {
     const groups = await this.getGroups(userId);
 
     // 获取所有站点
-    const sites = await this.getSites(undefined, userId);
+    const sites = (await this.getSites(undefined, userId)).map((site) => ({
+      ...site,
+      login_password: '',
+    }));
 
     // 获取所有配置
     const configs = await this.getConfigs(userId);
