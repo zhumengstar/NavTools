@@ -214,6 +214,22 @@ export class NavigationAPI {
     return !this.authEnabled || this.secret.trim().length >= 32;
   }
 
+  private async ensureSiteCredentialColumns(): Promise<void> {
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN login_username TEXT");
+      console.log('Migrated: Added login_username column to sites table');
+    } catch {
+      // The table may not exist yet, or the column may already exist.
+    }
+
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN login_password_cipher TEXT");
+      console.log('Migrated: Added login_password_cipher column to sites table');
+    } catch {
+      // The table may not exist yet, or the column may already exist.
+    }
+  }
+
   private hasCredentialEncryptionSecret(): boolean {
     return this.secret.trim().length >= 32;
   }
@@ -320,6 +336,8 @@ export class NavigationAPI {
     // 迁移：groups 表添加 user_id 字段
     // --- 快速路径：检查是否已经完全初始化 ---
     try {
+      await this.ensureSiteCredentialColumns();
+
       const isInitialized = await this.db
         .prepare("SELECT value FROM configs WHERE key = 'DB_INITIALIZED' AND user_id = 1")
         .first<{ value: string }>();
