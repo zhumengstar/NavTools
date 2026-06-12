@@ -1,0 +1,43 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "navtools-remote-dev",
+    "main": "worker/index.ts",
+    "account_id": "0f7122ab026d40f60676d876f61c3c98",
+    "compatibility_date": "2026-01-01",
+    "compatibility_flags": [
+        "nodejs_compat",
+        "no_handle_cross_request_promise_resolution"
+    ],
+    "assets": {
+        "directory": "dist",
+        "not_found_handling": "single-page-application"
+    },
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "mynav",
+            "database_id": "2539afd9-931b-444b-8bc7-2e0816242ba8",
+            "remote": true
+        }
+    ],
+    "kv_namespaces": [
+        {
+            "binding": "KV",
+            "id": "efda79cd54f84552891dda3748aef846",
+            "remote": true
+        }
+    ],
+    "vars": {
+        "VITE_API_BASE_URL": "/api",
+        "SKIP_INIT_DB": "true",
+        "AUTH_ENABLED": "true",
+        "AUTH_REQUIRED_FOR_READ": "false",
+        "AUTH_USERNAME": "admin",
+        "AUTH_PASSWORD": "$2y$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG",
+        "AUTH_SECRET": "UKcwT_%H5H6dy3:Co@#ESR-EIB*L5B[(",
+        "EMAIL_API_KEY": "",
+        "EMAIL_FROM": "onboarding@resend.dev",
+        "AI_BASE_URL": "https://cliproxy.1997121.xyz",
+        "AI_API_KEY": "WzIw4JJM9ZVx_HAKD1a2O4igBfz65T4x"
+    }
+}

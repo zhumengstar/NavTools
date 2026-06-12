@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS sites (
     icon TEXT,
     description TEXT,
     notes TEXT,
+    account_username_encrypted TEXT,
+    account_password_encrypted TEXT,
     order_num INTEGER NOT NULL,
     is_public INTEGER DEFAULT 1,
     is_featured INTEGER DEFAULT 0,

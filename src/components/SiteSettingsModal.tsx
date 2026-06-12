@@ -2,6 +2,7 @@
 import { useState, useEffect, memo } from 'react';
 import { Site, Group } from '../API/http';
 import { extractDomain, isSecureUrl } from '../utils/url';
+import { decryptCredential, encryptCredential } from '../utils/credentialsCrypto';
 // Material UI 导入
 import {
   Dialog,
@@ -33,6 +34,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
 interface SiteSettingsModalProps {
   site: Site;
@@ -42,6 +45,7 @@ interface SiteSettingsModalProps {
   open: boolean;
   groups?: Group[]; // 可选的分组列表
   iconApi?: string; // 图标API配置
+  credentialSecret?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   api: any;
 }
@@ -54,6 +58,7 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
   open,
   groups = [],
   iconApi = 'https://www.faviconextractor.com/favicon/{domain}?larger=true',
+  credentialSecret = null,
   api,
 }: SiteSettingsModalProps) {
   const theme = useTheme();
@@ -66,6 +71,8 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
     icon: site.icon || '',
     description: site.description || '',
     notes: site.notes || '',
+    account_username: '',
+    account_password: '',
     group_id: String(site.group_id),
     is_public: site.is_public ?? 1, // 默认为公开
     is_featured: site.is_featured ?? 0,
@@ -73,6 +80,8 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
 
   // 用于预览图标
   const [iconPreview, setIconPreview] = useState<string | null>(site.icon || null);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
 
   // 当外部 site 属性更新时（或者弹窗打开时），同步内部表单状态
   useEffect(() => {
@@ -83,6 +92,8 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
         icon: site.icon || '',
         description: site.description || '',
         notes: site.notes || '',
+        account_username: '',
+        account_password: '',
         group_id: String(site.group_id),
         is_public: site.is_public ?? 1,
         is_featured: site.is_featured ?? 0,
@@ -90,6 +101,46 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
       setIconPreview(site.icon || null);
     }
   }, [site, open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const hasCredentials = Boolean(site.account_username_encrypted || site.account_password_encrypted);
+    if (!hasCredentials) {
+      setCredentialError(null);
+      return;
+    }
+
+    if (!credentialSecret) {
+      setCredentialError('需要使用当前账号密码登录后才能解密已保存的网站账号密码。');
+      return;
+    }
+
+    let cancelled = false;
+    setCredentialError(null);
+
+    Promise.all([
+      decryptCredential(site.account_username_encrypted || '', credentialSecret),
+      decryptCredential(site.account_password_encrypted || '', credentialSecret),
+    ])
+      .then(([accountUsername, accountPassword]) => {
+        if (cancelled) return;
+        setFormData((prev) => ({
+          ...prev,
+          account_username: accountUsername,
+          account_password: accountPassword,
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCredentialError('网站账号密码解密失败，请确认是使用创建/保存该凭据时的账号密码登录。');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, site.account_username_encrypted, site.account_password_encrypted, credentialSecret]);
 
   // 验证错误
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -145,7 +196,7 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
 
   // 提交表单
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -174,12 +225,47 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
     }
 
     // 更新网站信息，将group_id转为数字
+    let accountUsernameEncrypted = site.account_username_encrypted || '';
+    let accountPasswordEncrypted = site.account_password_encrypted || '';
+    const hasAccountCredentials = Boolean(formData.account_username || formData.account_password);
+
+    if (hasAccountCredentials) {
+      if (!credentialSecret) {
+        setValidationError('请重新使用账号密码登录后再保存网站账号密码。');
+        return;
+      }
+
+      try {
+        accountUsernameEncrypted = await encryptCredential(formData.account_username || '', credentialSecret);
+        accountPasswordEncrypted = await encryptCredential(formData.account_password || '', credentialSecret);
+      } catch {
+        setValidationError('网站账号密码加密失败，请稍后重试。');
+        return;
+      }
+    } else {
+      accountUsernameEncrypted = '';
+      accountPasswordEncrypted = '';
+    }
+
+    const siteFormData = {
+      name: formData.name,
+      url: formData.url,
+      icon: formData.icon,
+      description: formData.description,
+      notes: formData.notes,
+      group_id: formData.group_id,
+      is_public: formData.is_public,
+      is_featured: formData.is_featured,
+    };
+
     onUpdate({
       ...site,
-      ...formData,
+      ...siteFormData,
       name: finalName,
       description: finalDescription,
       icon: finalIcon,
+      account_username_encrypted: accountUsernameEncrypted,
+      account_password_encrypted: accountPasswordEncrypted,
       group_id: Number(formData.group_id),
     });
 
@@ -484,6 +570,65 @@ const SiteSettingsModal = memo(function SiteSettingsModal({
               variant='outlined'
               size='small'
             />
+
+            <Divider />
+
+            <Box>
+              <Typography variant='subtitle2' fontWeight='600' gutterBottom>
+                账号密码
+              </Typography>
+              <Stack spacing={1.5}>
+                {credentialError && (
+                  <Alert severity='warning'>
+                    {credentialError}
+                  </Alert>
+                )}
+                <TextField
+                  id='account_username'
+                  name='account_username'
+                  label='登录账号'
+                  fullWidth
+                  value={formData.account_username || ''}
+                  onChange={handleChange}
+                  placeholder='可选，用于记录此网站的登录账号'
+                  variant='outlined'
+                  size='small'
+                  autoComplete='off'
+                  disabled={Boolean(credentialError && !credentialSecret)}
+                />
+                <TextField
+                  id='account_password'
+                  name='account_password'
+                  label='登录密码'
+                  fullWidth
+                  value={formData.account_password || ''}
+                  onChange={handleChange}
+                  placeholder='保存时会先在本地加密'
+                  variant='outlined'
+                  size='small'
+                  type={showAccountPassword ? 'text' : 'password'}
+                  autoComplete='new-password'
+                  disabled={Boolean(credentialError && !credentialSecret)}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position='end'>
+                        <IconButton
+                          edge='end'
+                          size='small'
+                          onClick={() => setShowAccountPassword((prev) => !prev)}
+                          aria-label={showAccountPassword ? '隐藏密码' : '显示密码'}
+                        >
+                          {showAccountPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Typography variant='caption' color='text.secondary'>
+                  服务器只保存密文，解密需要当前登录时输入的账号密码。
+                </Typography>
+              </Stack>
+            </Box>
 
             {/* 公开/私密开关、精选开关与上次访问时间展示 */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>

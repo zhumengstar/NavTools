@@ -5,6 +5,8 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
+        "dev:api": "wrangler dev --config wrangler.local.jsonc --local --port 8787",
+        "dev:api:remote": "node ./scripts/prepare-remote-d1-dev-vars.cjs && set NODE_OPTIONS=--require ./scripts/undici-proxy.cjs&& wrangler dev --config wrangler.remote.jsonc --port 8787",
         "build": "tsc -b && vite build",
         "lint": "eslint .",
         "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
@@ -40,10 +42,6 @@
     },
     "devDependencies": {
         "@cloudflare/vite-plugin": "^1.25.6",
-        "autoprefixer": "^10.4.20",
-        "postcss": "^8.4.49",
-        "remark-gfm": "^4.0.1",
-        "tailwindcss": "^3.4.17",
         "@types/bcrypt": "^5.0.2",
         "@types/bcryptjs": "^2.4.6",
         "@types/better-sqlite3": "^7.6.12",
@@ -52,17 +50,21 @@
         "@typescript-eslint/eslint-plugin": "^8.19.1",
         "@typescript-eslint/parser": "^8.19.1",
         "@vitejs/plugin-react": "^4.3.4",
+        "autoprefixer": "^10.4.20",
         "eslint": "^9.18.0",
         "eslint-plugin-react-hooks": "^5.1.0",
         "eslint-plugin-react-refresh": "^0.4.18",
         "globals": "^15.14.0",
+        "postcss": "^8.4.49",
         "prettier": "^3.4.2",
+        "remark-gfm": "^4.0.1",
+        "tailwindcss": "^3.4.17",
         "tsx": "^4.19.2",
         "typescript": "^5.7.2",
         "typescript-eslint": "^8.19.1",
         "vite": "^6.0.5",
         "vitepress": "^1.5.0",
-        "wrangler": "^4.7.2"
+        "wrangler": "^4.92.0"
     },
     "pnpm": {
         "onlyBuiltDependencies": [

@@ -23,6 +23,7 @@ import EditGroupDialog from './components/EditGroupDialog';
 import SiteSettingsModal from './components/SiteSettingsModal';
 
 import { sanitizeCSS, isSecureUrl, extractDomain } from './utils/url';
+import { createCredentialSecret } from './utils/credentialsCrypto';
 import { SearchResultItem } from './utils/search';
 import './App.css';
 
@@ -167,6 +168,9 @@ const DEFAULT_CONFIGS = {
   'site.iconApi': 'https://www.faviconextractor.com/favicon/{domain}', // 默认使用的API接口
   'site.searchBoxEnabled': 'true', // 是否启用搜索框
   'ui.style': 'classic', // UI风格: 'modern' | 'classic' - 访客默认使用经典模式
+  'ai.baseUrl': '',
+  'ai.apiKey': '',
+  'ai.defaultModel': 'gemini-3.1-pro-high',
   isAdmin: 'false',
 };
 
@@ -242,6 +246,7 @@ function App() {
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
+  const [credentialSecret, setCredentialSecret] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -628,6 +633,7 @@ function App() {
         setViewMode('readonly');
         setCurrentUserId(null);
         setUsername('User');
+        setCredentialSecret(null);
         setAvatarUrl(null);
 
         // 清空所有登录相关缓存，防止过期登录状态残留
@@ -640,6 +646,18 @@ function App() {
         api.isAuthenticated = true; // 同步 API 客户端状态
         setIsAuthenticated(true);
         setViewMode('edit');
+        try {
+          const savedCredentials = localStorage.getItem('saved_credentials');
+          if (savedCredentials) {
+            const decoded = atob(savedCredentials);
+            const separatorIndex = decoded.indexOf(':');
+            if (separatorIndex > 0) {
+              setCredentialSecret(createCredentialSecret(decoded.slice(0, separatorIndex), decoded.slice(separatorIndex + 1)));
+            }
+          }
+        } catch {
+          localStorage.removeItem('saved_credentials');
+        }
         setSortMode(SortMode.CrossGroupDrag); // 编辑模式默认启用跨组拖动
 
         // 已认证情况下，尝试从缓存快速加载数据以实现 Early SWR
@@ -687,6 +705,7 @@ function App() {
     } catch (error) {
       console.error('认证检查流程失败:', error);
       setIsAuthenticated(false);
+      setCredentialSecret(null);
       setViewMode('readonly');
     }
     // 注意：setIsAuthChecking(false) 统一移到 init 的 finally 中
@@ -710,6 +729,7 @@ function App() {
         setViewMode('edit');
         setSortMode(SortMode.CrossGroupDrag); // 编辑模式默认启用跨组拖动
         setUsername(username);
+        setCredentialSecret(createCredentialSecret(username, password));
         if (loginResponse.userId) {
           setCurrentUserId(loginResponse.userId);
         }
@@ -765,6 +785,7 @@ function App() {
         handleError(message);
         setLoginError(message);
         setIsAuthenticated(false);
+        setCredentialSecret(null);
         setViewMode('readonly');
       }
     } catch (error) {
@@ -892,6 +913,7 @@ function App() {
 
     setIsAuthenticated(false);
     setUsername('User');
+    setCredentialSecret(null);
     setCurrentUserId(null);
     setAvatarUrl(null);
     setIsAdmin(false);
@@ -3534,6 +3556,49 @@ function App() {
                           />
                         </Box>
 
+                        <Box sx={{ mb: 1, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                          <Typography variant='subtitle1' gutterBottom>
+                            AI 模型配置
+                          </Typography>
+                          <Stack spacing={2}>
+                            <TextField
+                              margin='dense'
+                              name='ai.baseUrl'
+                              label='AI API Base URL'
+                              type='url'
+                              fullWidth
+                              variant='outlined'
+                              value={tempConfigs['ai.baseUrl'] || ''}
+                              onChange={handleConfigInputChange}
+                              placeholder='https://api.example.com/v1'
+                              helperText='OpenAI 兼容接口地址，未填写时使用环境变量 AI_BASE_URL'
+                            />
+                            <TextField
+                              margin='dense'
+                              name='ai.apiKey'
+                              label='AI API Key'
+                              type='password'
+                              fullWidth
+                              variant='outlined'
+                              value={tempConfigs['ai.apiKey'] || ''}
+                              onChange={handleConfigInputChange}
+                              placeholder='sk-...'
+                              helperText='用于获取模型列表和发起聊天请求，优先于环境变量 AI_API_KEY'
+                            />
+                            <TextField
+                              margin='dense'
+                              name='ai.defaultModel'
+                              label='默认模型'
+                              fullWidth
+                              variant='outlined'
+                              value={tempConfigs['ai.defaultModel'] || ''}
+                              onChange={handleConfigInputChange}
+                              placeholder='gemini-3.1-pro-high'
+                              helperText='右侧智能助手默认选中的模型，用户仍可在助手中切换'
+                            />
+                          </Stack>
+                        </Box>
+
                         {/* Placeholder for future features */}
                         <Box sx={{
                           display: 'flex',
@@ -3692,6 +3757,7 @@ function App() {
                     api={api}
                     username={username}
                     avatarUrl={avatarUrl}
+                    defaultModel={configs['ai.defaultModel']}
                     groups={groups}
                     onAddSite={async (site) => {
                       const targetGroup = groups.find(g => g.id === site.groupId);
@@ -3840,6 +3906,7 @@ function App() {
             onClose={() => setIsSettingsOpen(false)}
             groups={groups}
             iconApi={configs['site.iconApi']}
+            credentialSecret={credentialSecret}
             api={api}
           />
         </>

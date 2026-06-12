@@ -113,11 +113,12 @@ interface AIChatPanelProps {
     api: any;
     username: string;
     avatarUrl?: string | null;
+    defaultModel?: string;
     groups: any[];
     onAddSite: (site: any) => Promise<boolean>;
 }
 
-const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, groups, onAddSite }) => {
+const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, defaultModel, groups, onAddSite }) => {
     const theme = useTheme();
     const [open, setOpen] = useState(false);
 
@@ -139,7 +140,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
     const isDark = theme.palette.mode === 'dark';
     const inputRef = useRef<HTMLInputElement>(null);
     const [selectedModel, setSelectedModel] = useState(() => {
-        return localStorage.getItem(`chat_model_${username}`) || 'gemini-3.1-pro-high';
+        return localStorage.getItem(`chat_model_${username}`) || defaultModel || 'gemini-3.1-pro-high';
     });
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
     const [fetchingModels, setFetchingModels] = useState(false);
@@ -202,6 +203,14 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, gro
         };
         fetchModels();
     }, [api, username]);
+
+    useEffect(() => {
+        if (!defaultModel) return;
+        const savedModel = localStorage.getItem(`chat_model_${username}`);
+        if (!savedModel) {
+            setSelectedModel(defaultModel);
+        }
+    }, [defaultModel, username]);
 
     // Bookmark adding state
     const [pendingSite, setPendingSite] = useState<{ name: string, url: string } | null>(null);

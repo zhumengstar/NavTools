@@ -309,7 +309,8 @@ export default {
                     // 每次请求都确保数据库状态正确。
                     // 依靠 NavigationAPI.initDB() 内部的“快速路径” (fast-path) 来保持高性能。
                     // 移除全局 initPromise 存储，因为它会导致 Miniflare 报 "Cannot perform I/O on behalf of a different request" 错误。
-                    if (path !== 'init' && !hasAttemptedInit) {
+                    const shouldSkipInitDB = (env as any).SKIP_INIT_DB === 'true';
+                    if (path !== 'init' && !hasAttemptedInit && !shouldSkipInitDB) {
                         try {
                             const res = await api.initDB();
                             if (res.success) {
@@ -429,6 +430,17 @@ export default {
                                 status: result.success ? 200 : 400,
                             });
                         } catch (error) {
+                            log({
+                                level: 'error',
+                                message: 'Failed to fetch random sites',
+                                path: url.pathname,
+                                method: request.method,
+                                details: error instanceof Error ? {
+                                    name: error.name,
+                                    message: error.message,
+                                    stack: error.stack,
+                                } : error,
+                            });
                             return createJsonResponse(
                                 {
                                     success: false,
@@ -563,6 +575,9 @@ export default {
 
                     // 初始化数据库接口 - 不需要验证
                     if (path === "init" && method === "GET") {
+                        if ((env as any).SKIP_INIT_DB === 'true') {
+                            return createJsonResponse({ success: true, message: "已跳过远程数据库初始化" }, request);
+                        }
                         const initResult = await api.initDB();
                         if (initResult.alreadyInitialized) {
                             return createResponse("数据库已经初始化过，无需重复初始化", request, { status: 200 });
@@ -575,6 +590,7 @@ export default {
                     // 验证中间件 - 条件认证
                     let isAuthenticated = false; // 记录认证状态
                     let currentUserId: number | undefined;
+                    let currentUserRole: string | undefined;
 
                     if (api.isAuthEnabled()) {
                         const requestPath = `/api/${path}`;
@@ -625,6 +641,7 @@ export default {
                                 if (verifyResult.valid) {
                                     isAuthenticated = true; // 认证成功
                                     currentUserId = verifyResult.payload?.id as number;
+                                    currentUserRole = verifyResult.payload?.role as string | undefined;
                                     if (currentUserId !== undefined) {
                                         api.currentUserId = currentUserId;
                                     }
@@ -832,6 +849,17 @@ export default {
                             const sites = await api.getRandomSites(safeLimit);
                             return createJsonResponse(sites, request);
                         } catch (error) {
+                            log({
+                                level: 'error',
+                                message: 'Failed to fetch random sites',
+                                path: url.pathname,
+                                method: request.method,
+                                details: error instanceof Error ? {
+                                    name: error.name,
+                                    message: error.message,
+                                    stack: error.stack,
+                                } : error,
+                            });
                             return createJsonResponse(
                                 { error: "获取随机站点失败" },
                                 request,
@@ -1049,6 +1077,9 @@ export default {
                         return createJsonResponse(result, request);
                     } else if (path === "init" && method === "GET") {
                         // 初始化数据库及迁移
+                        if ((env as any).SKIP_INIT_DB === 'true') {
+                            return createJsonResponse({ success: true, message: "已跳过远程数据库初始化" }, request);
+                        }
                         await api.initDB();
                         return createJsonResponse({ success: true, message: "数据库初始化/迁移完成" }, request);
                     } else if (path === "auth/register" && method === "POST") {
@@ -1344,6 +1375,7 @@ export default {
                     // 配置相关API
                     else if (path === "configs" && method === "GET") {
                         const configs = await api.getConfigs(currentUserId);
+                        const isAdminUser = !api.isAuthEnabled() || (currentUserRole || '').toLowerCase() === 'admin';
 
                         // 如果未认证，仅返回特定公共字段
                         if (!isAuthenticated) {
@@ -1377,9 +1409,17 @@ export default {
                             return createJsonResponse(publicConfigs, request);
                         }
 
+                        if (!isAdminUser) {
+                            delete configs['ai.apiKey'];
+                        }
+
                         return createJsonResponse(configs, request);
                     } else if (path.startsWith("configs/") && method === "GET") {
                         const key = path.substring("configs/".length);
+                        const isAdminUser = !api.isAuthEnabled() || (currentUserRole || '').toLowerCase() === 'admin';
+                        if (key === 'ai.apiKey' && !isAdminUser) {
+                            return createJsonResponse({ key, value: null }, request);
+                        }
                         const value = await api.getConfig(key, currentUserId);
                         return createJsonResponse({ key, value }, request);
                     } else if (path.startsWith("configs/") && method === "PUT") {
@@ -1414,7 +1454,13 @@ export default {
                             );
                         }
 
-                        const result = await api.setConfig(key, data.value, currentUserId);
+                        const isAdminUser = !api.isAuthEnabled() || (currentUserRole || '').toLowerCase() === 'admin';
+                        if (key.startsWith('ai.') && !isAdminUser) {
+                            return createJsonResponse({ success: false, message: "权限不足（需要管理员权限）" }, request, { status: 403 });
+                        }
+
+                        const targetConfigUserId = key.startsWith('ai.') ? 1 : currentUserId;
+                        const result = await api.setConfig(key, data.value, targetConfigUserId);
                         return createJsonResponse({ success: result }, request);
                     } else if (path.startsWith("configs/") && method === "DELETE") {
                         const key = path.substring("configs/".length);
@@ -1859,16 +1905,19 @@ export default {
                         const CF_MODELS: any[] = [];
 
                         let externalModels: any[] = [];
+                        const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
+                        const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
+                        const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
                         console.log('[Worker Debug] Checking external models config:', {
-                            hasBaseUrl: !!env.AI_BASE_URL,
-                            baseUrl: env.AI_BASE_URL,
-                            hasApiKey: !!env.AI_API_KEY
+                            hasBaseUrl: !!configuredBaseUrl,
+                            baseUrl: configuredBaseUrl,
+                            hasApiKey: !!configuredApiKey
                         });
 
-                        if (env.AI_BASE_URL && env.AI_API_KEY) {
+                        if (configuredBaseUrl && configuredApiKey) {
                             try {
                                 // Normalize Base URL: ensure it doesn't end with slash
-                                let baseUrl = env.AI_BASE_URL.replace(/\/$/, '');
+                                let baseUrl = configuredBaseUrl.replace(/\/$/, '');
                                 // If user didn't include /v1, try to be helpful (though some APIs might not use v1)
                                 // But standard OpenAI compatible APIs usually have /v1. 
                                 // We will trust the user's input primarily, but maybe try appending /v1 if the first capability check fails? 
@@ -1895,7 +1944,7 @@ export default {
 
                                 const response = await fetch(fetchUrl, {
                                     headers: {
-                                        'Authorization': `Bearer ${env.AI_API_KEY}`
+                                        'Authorization': `Bearer ${configuredApiKey}`
                                     },
                                     signal: controller.signal
                                 });
@@ -1945,7 +1994,7 @@ export default {
                             console.warn('[Worker Debug] Skipping external models: Missing configuration');
                         }
 
-                        return createJsonResponse({ data: [...CF_MODELS, ...externalModels] }, request);
+                        return createJsonResponse({ data: [...CF_MODELS, ...externalModels], defaultModel: configuredDefaultModel }, request);
                     }
 
                     else {
@@ -1971,7 +2020,10 @@ export default {
                         console.log('[AI Chat] 客户端 IP:', clientIp);
 
                         // 模型配置 - 切换模型时只需修改这里
-                        const selectedModel = body.model || 'gemini-3.1-pro-high';
+                        const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
+                        const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
+                        const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
+                        const selectedModel = body.model || configuredDefaultModel;
 
                         // --- 额度查验与重置系统 ---
                         // 1. 检查用户是否已认证
@@ -2099,10 +2151,10 @@ export default {
                                 // @ts-ignore
                                 return response.response || '';
                             } else {
-                                if (!env.AI_BASE_URL || !env.AI_API_KEY) {
+                                if (!configuredBaseUrl || !configuredApiKey) {
                                     throw new Error('外部 AI 服务未配置');
                                 }
-                                let baseUrl = env.AI_BASE_URL.replace(/\/$/, '');
+                                let baseUrl = configuredBaseUrl.replace(/\/$/, '');
                                 if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
                                     baseUrl = `${baseUrl}/v1`;
                                 }
@@ -2110,7 +2162,7 @@ export default {
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${env.AI_API_KEY}`
+                                        'Authorization': `Bearer ${configuredApiKey}`
                                     },
                                     body: JSON.stringify({ model: modelToUse, messages, stream: false })
                                 });
@@ -2404,7 +2456,10 @@ export default {
                                         },
                                     });
                                 } else {
-                                    let baseUrl = env.AI_BASE_URL!.replace(/\/$/, '');
+                                    if (!configuredBaseUrl || !configuredApiKey) {
+                                        throw new Error('外部 AI 服务未配置');
+                                    }
+                                    let baseUrl = configuredBaseUrl.replace(/\/$/, '');
                                     if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
                                         baseUrl = `${baseUrl}/v1`;
                                     }
@@ -2412,7 +2467,7 @@ export default {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${env.AI_API_KEY}`
+                                            'Authorization': `Bearer ${configuredApiKey}`
                                         },
                                         body: JSON.stringify({ model: selectedModel, messages, stream: true })
                                     });
@@ -2611,6 +2666,8 @@ interface SiteInput {
     icon?: string;
     description?: string;
     notes?: string;
+    account_username_encrypted?: string;
+    account_password_encrypted?: string;
     order_num?: number;
     is_public?: number;
     is_featured?: number;
@@ -2788,6 +2845,20 @@ function validateSite(data: SiteInput): {
         sanitizedData.notes =
             typeof data.notes === "string"
                 ? data.notes.trim().slice(0, 1000) // 限制长度
+                : "";
+    }
+
+    if (data.account_username_encrypted !== undefined) {
+        sanitizedData.account_username_encrypted =
+            typeof data.account_username_encrypted === "string"
+                ? data.account_username_encrypted.trim().slice(0, 4000)
+                : "";
+    }
+
+    if (data.account_password_encrypted !== undefined) {
+        sanitizedData.account_password_encrypted =
+            typeof data.account_password_encrypted === "string"
+                ? data.account_password_encrypted.trim().slice(0, 4000)
                 : "";
     }
 

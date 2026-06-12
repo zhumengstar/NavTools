@@ -27,6 +27,10 @@ interface D1Result<T = unknown> {
 // 定义环境变量接口
 interface Env {
   DB: D1Database;
+  USE_D1_HTTP?: string;
+  CF_ACCOUNT_ID?: string;
+  CF_D1_DATABASE_ID?: string;
+  CF_D1_API_TOKEN?: string;
   KV: any; // KV 命名空间
   AI: any; // AI 绑定
   AUTH_ENABLED?: string; // 是否启用身份验证
@@ -35,6 +39,89 @@ interface Env {
   AUTH_SECRET?: string; // JWT密钥
   EMAIL_API_KEY?: string;
   EMAIL_FROM?: string;
+}
+
+class RemoteD1HttpDatabase implements D1Database {
+  constructor(
+    private accountId: string,
+    private databaseId: string,
+    private apiToken: string
+  ) {}
+
+  prepare(query: string): D1PreparedStatement {
+    return new RemoteD1HttpPreparedStatement(this, query);
+  }
+
+  async exec(query: string): Promise<D1Result> {
+    const statements = query.split(';').map(statement => statement.trim()).filter(Boolean);
+    let lastResult: D1Result = { success: true };
+    for (const statement of statements) {
+      lastResult = await this.query(statement);
+    }
+    return lastResult;
+  }
+
+  async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    const results: D1Result<T>[] = [];
+    for (const statement of statements) {
+      results.push(await statement.run<T>());
+    }
+    return results;
+  }
+
+  async query<T = unknown>(sql: string, params: unknown[] = []): Promise<D1Result<T>> {
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/d1/database/${this.databaseId}/query`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sql, params }),
+      }
+    );
+    const payload = await response.json() as {
+      success: boolean;
+      errors?: { message?: string }[];
+      result?: D1Result<T>[];
+    };
+    const result = payload.result?.[0];
+    if (!response.ok || !payload.success || !result?.success) {
+      const message = payload.errors?.map(error => error.message).filter(Boolean).join('; ')
+        || result?.error
+        || `Cloudflare D1 HTTP query failed with ${response.status}`;
+      throw new Error(message);
+    }
+    return result;
+  }
+}
+
+class RemoteD1HttpPreparedStatement implements D1PreparedStatement {
+  private values: unknown[] = [];
+
+  constructor(private database: RemoteD1HttpDatabase, private query: string) {}
+
+  bind(...values: unknown[]): D1PreparedStatement {
+    const statement = new RemoteD1HttpPreparedStatement(this.database, this.query);
+    statement.values = values;
+    return statement;
+  }
+
+  async first<T = unknown>(column?: string): Promise<T | null> {
+    const result = await this.all<Record<string, unknown>>();
+    const row = result.results?.[0];
+    if (!row) return null;
+    return (column ? row[column] : row) as T;
+  }
+
+  async run<T = unknown>(): Promise<D1Result<T>> {
+    return this.database.query<T>(this.query, this.values);
+  }
+
+  async all<T = unknown>(): Promise<D1Result<T>> {
+    return this.database.query<T>(this.query, this.values);
+  }
 }
 
 // 数据类型定义
@@ -60,6 +147,8 @@ export interface Site {
   icon: string;
   description: string;
   notes: string;
+  account_username_encrypted?: string;
+  account_password_encrypted?: string;
   order_num: number;
   is_public?: number; // 0 = 私密（仅管理员可见），1 = 公开（访客可见）
   last_clicked_at?: string; // 上次点击时间
@@ -199,7 +288,10 @@ export class NavigationAPI {
     } else {
       // Backend/Worker mode
       const env = envOrUrl as Env;
-      this.db = env.DB;
+      this.db = env.USE_D1_HTTP === 'true' && env.CF_ACCOUNT_ID && env.CF_D1_DATABASE_ID && env.CF_D1_API_TOKEN
+        ? new RemoteD1HttpDatabase(env.CF_ACCOUNT_ID, env.CF_D1_DATABASE_ID, env.CF_D1_API_TOKEN)
+        : env.DB;
+      env.DB = this.db;
       this.authEnabled = env.AUTH_ENABLED === 'true';
       this.username = env.AUTH_USERNAME || '';
       this.passwordHash = env.AUTH_PASSWORD || '';
@@ -289,7 +381,7 @@ export class NavigationAPI {
 
     // 再创建sites表
     await this.db.exec(
-      `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, icon TEXT, description TEXT, notes TEXT, order_num INTEGER NOT NULL, is_public INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE);`
+      `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, icon TEXT, description TEXT, notes TEXT, account_username_encrypted TEXT, account_password_encrypted TEXT, order_num INTEGER NOT NULL, is_public INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at TIMESTAMP, last_clicked_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE);`
     );
 
     // 创建配置表
@@ -373,6 +465,21 @@ export class NavigationAPI {
     }
 
     // 数据库迁移：创建 user_quotas 表
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN last_clicked_at TIMESTAMP");
+      console.log('Migrated: Added last_clicked_at column to sites table');
+    } catch (e) {
+      // Field may already exist.
+    }
+
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN account_username_encrypted TEXT");
+      await this.db.exec("ALTER TABLE sites ADD COLUMN account_password_encrypted TEXT");
+      console.log('Migrated: Added encrypted account fields to sites table');
+    } catch (e) {
+      // Fields may already exist.
+    }
+
     try {
       await this.db.exec(`CREATE TABLE IF NOT EXISTS user_quotas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1151,7 +1258,7 @@ export class NavigationAPI {
   // 网站相关 API
   async getSites(groupId?: number, userId?: number): Promise<Site[]> {
     let query = `
-      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at 
+      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.account_username_encrypted, s.account_password_encrypted, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at 
       FROM sites s
     `;
 
@@ -1223,6 +1330,8 @@ export class NavigationAPI {
         s.icon as site_icon,
         s.description as site_description,
         s.notes as site_notes,
+        s.account_username_encrypted as site_account_username_encrypted,
+        s.account_password_encrypted as site_account_password_encrypted,
         s.order_num as site_order,
         s.is_public as site_is_public,
         s.is_deleted as site_is_deleted,
@@ -1254,6 +1363,8 @@ export class NavigationAPI {
       site_icon: string | null;
       site_description: string | null;
       site_notes: string | null;
+      site_account_username_encrypted: string | null;
+      site_account_password_encrypted: string | null;
       site_order: number | null;
       site_is_public?: number;
       site_is_deleted?: number;
@@ -1296,6 +1407,8 @@ export class NavigationAPI {
           icon: row.site_icon || '',
           description: row.site_description || '',
           notes: row.site_notes || '',
+          account_username_encrypted: row.site_account_username_encrypted || '',
+          account_password_encrypted: row.site_account_password_encrypted || '',
           is_featured: row.site_is_featured || 0,
           order_num: row.site_order!,
           is_public: row.site_is_public,
@@ -1317,6 +1430,8 @@ export class NavigationAPI {
     groupName: string;
     ownerName: string;
   }[]> {
+    const safeLimit = Math.min(Math.max(Math.floor(Number(limit) || 20), 1), 50);
+    const candidateLimit = Math.min(Math.max(safeLimit * 4, 50), 200);
     // 首先尝试获取推荐的站点
     const featuredQuery = `
       SELECT
@@ -1337,12 +1452,14 @@ export class NavigationAPI {
       FROM sites s
       JOIN groups g ON s.group_id = g.id
       JOIN users u ON g.user_id = u.id
-      WHERE s.is_public = 1 AND g.is_public = 1 AND s.is_featured = 1 AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-      ORDER BY RANDOM()
-      LIMIT ?
+      WHERE s.is_public = 1 AND g.is_public = 1 AND s.is_featured = 1
+        AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
+        AND (g.is_deleted = 0 OR g.is_deleted IS NULL)
+      ORDER BY s.id DESC
+      LIMIT ${candidateLimit}
     `;
 
-    const featuredResult = await this.db.prepare(featuredQuery).bind(limit).all<{
+    const featuredResult = await this.db.prepare(featuredQuery).all<{
       site_id: number;
       group_id: number;
       site_name: string;
@@ -1361,10 +1478,25 @@ export class NavigationAPI {
 
     // 如果有推荐站点，返回推荐站点
     if (featuredResult.results && featuredResult.results.length > 0) {
-      return this.mapRandomSitesResult(featuredResult.results);
+      return this.mapRandomSitesResult(this.shuffleRows(featuredResult.results).slice(0, safeLimit));
     }
 
     // 如果没有推荐站点，返回所有公开站点
+    const publicCountQuery = `
+      SELECT COUNT(*) as count
+      FROM sites s
+      JOIN groups g ON s.group_id = g.id
+      JOIN users u ON g.user_id = u.id
+      WHERE s.is_public = 1 AND g.is_public = 1
+        AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
+        AND (g.is_deleted = 0 OR g.is_deleted IS NULL)
+    `;
+    const publicCountResult = await this.db.prepare(publicCountQuery).first<{ count: number }>();
+    const publicCount = Math.max(Number(publicCountResult?.count || 0), 0);
+    const offset = publicCount > candidateLimit
+      ? Math.floor(Math.random() * (publicCount - candidateLimit + 1))
+      : 0;
+
     const publicQuery = `
       SELECT
         s.id as site_id,
@@ -1384,12 +1516,14 @@ export class NavigationAPI {
       FROM sites s
       JOIN groups g ON s.group_id = g.id
       JOIN users u ON g.user_id = u.id
-      WHERE s.is_public = 1 AND g.is_public = 1 AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
-      ORDER BY RANDOM()
-      LIMIT ?
+      WHERE s.is_public = 1 AND g.is_public = 1
+        AND (s.is_deleted = 0 OR s.is_deleted IS NULL)
+        AND (g.is_deleted = 0 OR g.is_deleted IS NULL)
+      ORDER BY s.id
+      LIMIT ${candidateLimit} OFFSET ${offset}
     `;
 
-    const publicResult = await this.db.prepare(publicQuery).bind(limit).all<{
+    const publicResult = await this.db.prepare(publicQuery).all<{
       site_id: number;
       group_id: number;
       site_name: string;
@@ -1406,7 +1540,18 @@ export class NavigationAPI {
       owner_name: string;
     }>();
 
-    return this.mapRandomSitesResult(publicResult.results || []);
+    return this.mapRandomSitesResult(this.shuffleRows(publicResult.results || []).slice(0, safeLimit));
+  }
+
+  private shuffleRows<T>(rows: T[]): T[] {
+    const shuffled = [...rows];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const current = shuffled[i]!;
+      shuffled[i] = shuffled[j]!;
+      shuffled[j] = current;
+    }
+    return shuffled;
   }
 
   private mapRandomSitesResult(rows: {
@@ -1448,7 +1593,7 @@ export class NavigationAPI {
   async getSite(id: number): Promise<Site | null> {
     const result = await this.db
       .prepare(
-        'SELECT id, group_id, name, url, icon, description, notes, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at FROM sites WHERE id = ?'
+        'SELECT id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at FROM sites WHERE id = ?'
       )
       .bind(id)
       .first<Site>();
@@ -1479,9 +1624,9 @@ export class NavigationAPI {
     const result = await this.db
       .prepare(
         `
-      INSERT INTO sites (group_id, name, url, icon, description, notes, order_num, is_public)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      RETURNING id, group_id, name, url, icon, description, notes, order_num, is_public, last_clicked_at, created_at, updated_at
+      INSERT INTO sites (group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, last_clicked_at, created_at, updated_at
     `
       )
       .bind(
@@ -1491,6 +1636,8 @@ export class NavigationAPI {
         icon,
         site.description || '',
         site.notes || '',
+        site.account_username_encrypted || '',
+        site.account_password_encrypted || '',
         site.order_num,
         site.is_public ?? 1
       )
@@ -1515,6 +1662,8 @@ export class NavigationAPI {
       'icon',
       'description',
       'notes',
+      'account_username_encrypted',
+      'account_password_encrypted',
       'order_num',
       'is_public',
       'is_featured',
@@ -1542,7 +1691,7 @@ export class NavigationAPI {
     // 构建安全的参数化查询
     const query = `UPDATE sites SET ${updates.join(
       ', '
-    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, order_num, created_at, updated_at`;
+    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at`;
     params.push(id);
 
     const result = await this.db
@@ -1661,7 +1810,7 @@ export class NavigationAPI {
   async setConfig(key: string, value: string, userId: number = 1): Promise<boolean> {
     try {
       // 一些系统级配置强制归属于 admin (userId = 1)
-      const SYSTEM_KEYS = ['DB_INITIALIZED', 'DATA_INITIALIZED'];
+      const SYSTEM_KEYS = ['DB_INITIALIZED', 'DATA_INITIALIZED', 'ai.baseUrl', 'ai.apiKey', 'ai.defaultModel'];
       const targetUserId = SYSTEM_KEYS.includes(key) ? 1 : userId;
 
       // 使用UPSERT语法（SQLite支持）
@@ -1864,14 +2013,14 @@ export class NavigationAPI {
         if (existing) {
           siteStmts.push(
             this.db.prepare(
-              'UPDATE sites SET name = ?, icon = ?, description = ?, notes = ?, is_public = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-            ).bind(site.name, icon, site.description || '', site.notes || '', existing.id)
+              'UPDATE sites SET name = ?, icon = ?, description = ?, notes = ?, account_username_encrypted = ?, account_password_encrypted = ?, is_public = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+            ).bind(site.name, icon, site.description || '', site.notes || '', site.account_username_encrypted || '', site.account_password_encrypted || '', existing.id)
           );
           stats.sites.updated++;
         } else {
           siteStmts.push(
             this.db.prepare(
-              'INSERT INTO sites (group_id, name, url, icon, description, notes, order_num, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
+              'INSERT INTO sites (group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             ).bind(
               newGroupId,
               site.name,
@@ -1879,6 +2028,8 @@ export class NavigationAPI {
               icon,
               site.description || '',
               site.notes || '',
+              site.account_username_encrypted || '',
+              site.account_password_encrypted || '',
               site.order_num || 0
             )
           );
