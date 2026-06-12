@@ -1,4 +1,4 @@
-import { NavigationAPI, type LoginRequest, type RegisterRequest, type ResetPasswordRequest, type SendCodeRequest, type ExportData } from "../src/API/http";
+import { NavigationAPI, type LoginRequest, type RegisterRequest, type ResetPasswordRequest, type SendCodeRequest, type ExportData } from "../src/API/db";
 import { type Group, type Site } from "../src/types";
 
 /**
@@ -25,6 +25,21 @@ let hasAttemptedInit = false;
 /**
  * 生成唯一错误 ID
  */
+
+/**
+ * ???? AI ??
+ */
+async function getAiConfig(api: any, env: any) {
+    const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
+    const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
+    const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
+    return {
+        baseUrl: configuredBaseUrl,
+        apiKey: configuredApiKey,
+        defaultModel: configuredDefaultModel
+    };
+}
+
 function generateErrorId(): string {
     return crypto.randomUUID();
 }
@@ -93,9 +108,10 @@ function createErrorResponse(
  * ??AI?? (??????????????)
  */
 async function getAiConfig(api, env, requestBodyModel) {
-    const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
-    const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
-    const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
+                        const aiConfig = await getAiConfig(api, env);
+                        const configuredBaseUrl = aiConfig.baseUrl;
+                        const configuredApiKey = aiConfig.apiKey;
+                        const configuredDefaultModel = aiConfig.defaultModel;
     const selectedModel = requestBodyModel || configuredDefaultModel;
     
     if (!configuredBaseUrl || !configuredApiKey) {
@@ -1920,9 +1936,10 @@ export default {
                         const CF_MODELS: any[] = [];
 
                         let externalModels: any[] = [];
-                        const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
-                        const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
-                        const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
+                        const aiConfig = await getAiConfig(api, env);
+                        const configuredBaseUrl = aiConfig.baseUrl;
+                        const configuredApiKey = aiConfig.apiKey;
+                        const configuredDefaultModel = aiConfig.defaultModel;
                         console.log('[Worker Debug] Checking external models config:', {
                             hasBaseUrl: !!configuredBaseUrl,
                             baseUrl: configuredBaseUrl,
@@ -2035,9 +2052,10 @@ export default {
                         console.log('[AI Chat] 客户端 IP:', clientIp);
 
                         // 模型配置 - 切换模型时只需修改这里
-                        const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
-                        const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
-                        const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
+                        const aiConfig = await getAiConfig(api, env);
+                        const configuredBaseUrl = aiConfig.baseUrl;
+                        const configuredApiKey = aiConfig.apiKey;
+                        const configuredDefaultModel = aiConfig.defaultModel;
                         const selectedModel = body.model || configuredDefaultModel;
 
                         // --- 额度查验与重置系统 ---
