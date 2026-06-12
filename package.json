@@ -17,7 +17,9 @@
         "hash-password": "tsx scripts/hash-password.ts",
         "docs:dev": "vitepress dev docs --port 5174",
         "docs:build": "vitepress build docs",
-        "docs:preview": "vitepress preview docs --port 4173"
+        "docs:preview": "vitepress preview docs --port 4173",
+        "test": "vitest run",
+        "test:watch": "vitest"
     },
     "dependencies": {
         "@cfworker/jwt": "^7.0.4",
