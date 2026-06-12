@@ -1,5 +1,7 @@
 import { NavigationAPI, type LoginRequest, type RegisterRequest, type ResetPasswordRequest, type SendCodeRequest, type ExportData } from "../src/API/db";
 import { type Group, type Site } from "../src/types";
+import { generateErrorId, log, createJsonResponse, createErrorResponse, validateRequestBody } from "./utils/httpUtils";
+
 
 /**
  * 简单的内存速率限制器
@@ -40,120 +42,7 @@ async function getAiConfig(api: any, env: any) {
     };
 }
 
-function generateErrorId(): string {
-    return crypto.randomUUID();
-}
 
-/**
- * 结构化日志
- */
-interface LogData {
-    timestamp?: string;
-    level: 'info' | 'warn' | 'error';
-    message: string;
-    errorId?: string;
-    path?: string;
-    method?: string;
-    details?: unknown;
-}
-
-function log(data: LogData): void {
-    console.log(JSON.stringify({
-        ...data,
-        timestamp: data.timestamp || new Date().toISOString(),
-    }));
-}
-
-/**
- * 创建错误响应
- */
-function createErrorResponse(
-    error: unknown,
-    request: Request,
-    context?: string
-): Response {
-    const errorId = generateErrorId();
-    const url = new URL(request.url);
-
-    // 记录详细错误日志
-    log({
-        timestamp: new Date().toISOString(),
-        level: 'error',
-        message: error instanceof Error ? error.message : '未知错误',
-        errorId,
-        path: url.pathname,
-        method: request.method,
-        details: error instanceof Error ? {
-            name: error.name,
-            stack: error.stack,
-        } : error,
-    });
-
-    // 返回用户友好的错误信息
-    return createJsonResponse(
-        {
-            success: false,
-            message: context ? `${context}失败` : '处理请求时发生错误',
-            errorId,
-        },
-        request,
-        { status: 500 }
-    );
-}
-
-// 请求体大小限制配置
-
-
-/**
- * ??AI?? (??????????????)
- */
-async function getAiConfig(api, env, requestBodyModel) {
-                        const aiConfig = await getAiConfig(api, env);
-                        const configuredBaseUrl = aiConfig.baseUrl;
-                        const configuredApiKey = aiConfig.apiKey;
-                        const configuredDefaultModel = aiConfig.defaultModel;
-    const selectedModel = requestBodyModel || configuredDefaultModel;
-    
-    if (!configuredBaseUrl || !configuredApiKey) {
-        throw new Error('?? AI ?????');
-    }
-    
-    let baseUrl = configuredBaseUrl.replace(/\/$/, '');
-    if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
-        baseUrl = `${baseUrl}/v1`;
-    }
-    
-    return { baseUrl, apiKey: configuredApiKey, model: selectedModel };
-}
-
-const MAX_BODY_SIZE = 1024 * 1024; // 1MB
-
-/**
- * 验证请求体大小并解析 JSON
- */
-async function validateRequestBody(request: Request): Promise<unknown> {
-    const contentLength = request.headers.get('Content-Length');
-
-    // 检查 Content-Length 头
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-        throw new Error('请求体过大，最大允许 1MB');
-    }
-
-    // 读取并验证实际大小
-    // 使用 clone() 以便原始请求仍可被其他逻辑（如果需要）读取
-    const clonedRequest = request.clone();
-    const bodyText = await clonedRequest.text();
-
-    if (bodyText.length > MAX_BODY_SIZE) {
-        throw new Error('请求体过大，最大允许 1MB');
-    }
-
-    try {
-        return JSON.parse(bodyText);
-    } catch {
-        throw new Error('无效的 JSON 格式');
-    }
-}
 
 /**
  * 深度验证导出数据
