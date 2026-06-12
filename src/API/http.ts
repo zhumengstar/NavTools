@@ -1,5 +1,7 @@
 // src/api/http.ts
 // 不使用外部JWT库，改为内置的crypto API
+import { Group, Site } from '../types';
+
 import bcrypt from 'bcryptjs';
 const { compareSync, hashSync } = bcrypt;
 

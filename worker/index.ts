@@ -1,13 +1,5 @@
-import {
-    NavigationAPI,
-    type LoginRequest,
-    type RegisterRequest,
-    type ResetPasswordRequest,
-    type SendCodeRequest,
-    type ExportData,
-    type Group,
-    type Site,
-} from "../src/API/http";
+import { NavigationAPI, type LoginRequest, type RegisterRequest, type ResetPasswordRequest, type SendCodeRequest, type ExportData } from "../src/API/http";
+import { type Group, type Site } from "../src/types";
 
 /**
  * 简单的内存速率限制器
@@ -95,6 +87,29 @@ function createErrorResponse(
 }
 
 // 请求体大小限制配置
+
+
+/**
+ * ??AI?? (??????????????)
+ */
+async function getAiConfig(api, env, requestBodyModel) {
+    const configuredBaseUrl = (await api.getConfig('ai.baseUrl', 1)) || env.AI_BASE_URL;
+    const configuredApiKey = (await api.getConfig('ai.apiKey', 1)) || env.AI_API_KEY;
+    const configuredDefaultModel = (await api.getConfig('ai.defaultModel', 1)) || 'gemini-3.1-pro-high';
+    const selectedModel = requestBodyModel || configuredDefaultModel;
+    
+    if (!configuredBaseUrl || !configuredApiKey) {
+        throw new Error('?? AI ?????');
+    }
+    
+    let baseUrl = configuredBaseUrl.replace(/\/$/, '');
+    if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
+        baseUrl = `${baseUrl}/v1`;
+    }
+    
+    return { baseUrl, apiKey: configuredApiKey, model: selectedModel };
+}
+
 const MAX_BODY_SIZE = 1024 * 1024; // 1MB
 
 /**
