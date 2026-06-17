@@ -84,17 +84,22 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 {bookmarkCount !== undefined && bookmarkCount > 0 && (
                                     <Box component="span" sx={{
                                         ml: 1.5,
-                                        px: 1,
-                                        py: 0.2,
-                                        fontSize: '0.75rem',
-                                        borderRadius: '10px',
-                                        background: alpha(theme.palette.primary.main, 0.15),
-                                        color: theme.palette.mode === 'dark' ? '#a78bfa' : theme.palette.primary.main,
+                                        px: 1.2,
+                                        py: 0.4,
+                                        fontSize: '0.85rem',
+                                        borderRadius: '16px',
+                                        background: theme.palette.mode === 'dark' 
+                                            ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`
+                                            : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.4)}, ${alpha(theme.palette.secondary.light, 0.3)})`,
+                                        color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
                                         border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-                                        verticalAlign: 'middle',
-                                        letterSpacing: 0,
-                                        fontFamily: theme.typography.fontFamily,
-                                        fontWeight: 600
+                                        verticalAlign: 'text-bottom',
+                                        boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.15)}`,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        lineHeight: 1,
+                                        fontWeight: 700,
+                                        backdropFilter: 'blur(4px)'
                                     }}>
                                         {bookmarkCount}
                                     </Box>
@@ -127,16 +132,20 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                                 {bookmarkCount !== undefined && bookmarkCount > 0 && (
                                     <Box component="span" sx={{
                                         ml: 1,
-                                        px: 0.8,
-                                        py: 0.1,
-                                        fontSize: '0.7rem',
-                                        borderRadius: '8px',
-                                        background: alpha(theme.palette.primary.main, 0.1),
-                                        color: theme.palette.primary.main,
-                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                                        letterSpacing: 0,
-                                        fontFamily: theme.typography.fontFamily,
-                                        fontWeight: 500
+                                        px: 1,
+                                        py: 0.3,
+                                        fontSize: '0.75rem',
+                                        borderRadius: '12px',
+                                        background: theme.palette.mode === 'dark' 
+                                            ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`
+                                            : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.4)}, ${alpha(theme.palette.secondary.light, 0.3)})`,
+                                        color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
+                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                                        verticalAlign: 'text-bottom',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        lineHeight: 1,
+                                        fontWeight: 700
                                     }}>
                                         {bookmarkCount}
                                     </Box>
