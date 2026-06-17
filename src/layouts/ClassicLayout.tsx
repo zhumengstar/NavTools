@@ -5,6 +5,8 @@ import {
     Container,
     Fab,
     Theme,
+    alpha,
+    useTheme,
 } from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { isSecureUrl } from '../utils/url';
@@ -54,6 +56,7 @@ interface Props {
 }
 
 const ClassicLayout: React.FC<Props> = ({ children, headerContent, title, configs, bookmarkCount = 0 }) => {
+    const theme = useTheme();
 
     return (
         <Box
@@ -140,15 +143,24 @@ const ClassicLayout: React.FC<Props> = ({ children, headerContent, title, config
                                 ml: 2,
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                px: 1.5,
-                                py: 0.5,
-                                fontSize: '1rem',
-                                borderRadius: '12px',
-                                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-                                border: '1px solid divider',
-                                color: 'text.secondary',
+                                justifyContent: 'center',
+                                px: 1.4,
+                                py: 0.55,
+                                minWidth: 48,
+                                fontFamily: '"Orbitron", "Inter", sans-serif',
+                                fontSize: { xs: '0.88rem', sm: '1rem' },
+                                lineHeight: 1,
+                                letterSpacing: '.03em',
+                                borderRadius: '999px',
+                                bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.primary.light, 0.18) : alpha(theme.palette.primary.main, 0.1),
+                                border: `1px solid ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.42 : 0.24)}`,
+                                color: theme.palette.mode === 'dark' ? '#fff' : theme.palette.primary.dark,
+                                WebkitTextFillColor: theme.palette.mode === 'dark' ? '#fff' : theme.palette.primary.dark,
                                 verticalAlign: 'middle',
-                                fontWeight: 'normal'
+                                fontWeight: 900,
+                                boxShadow: theme.palette.mode === 'dark'
+                                    ? `0 0 0 1px ${alpha(theme.palette.common.white, 0.08)}, 0 6px 18px ${alpha(theme.palette.primary.main, 0.22)}`
+                                    : `0 4px 14px ${alpha(theme.palette.primary.main, 0.14)}`,
                             }}>
                                 {bookmarkCount} 个书签
                             </Box>

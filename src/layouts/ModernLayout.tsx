@@ -44,6 +44,34 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
         boxShadow: `0 4px 30px ${alpha(theme.palette.common.black, 0.05)}`,
     }), [theme]);
 
+    const bookmarkCountBadgeSx = useMemo(() => ({
+        ml: { xs: 1, md: 1.5 },
+        px: { xs: 1.05, md: 1.25 },
+        py: { xs: 0.3, md: 0.4 },
+        minWidth: { xs: 34, md: 40 },
+        justifyContent: 'center',
+        fontFamily: '"Orbitron", "Inter", sans-serif',
+        fontSize: { xs: '0.78rem', md: '0.9rem' },
+        fontWeight: 900,
+        letterSpacing: '.04em',
+        borderRadius: '999px',
+        background: theme.palette.mode === 'dark'
+            ? `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.28)}, ${alpha(theme.palette.secondary.light, 0.22)})`
+            : `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.14)}, ${alpha(theme.palette.secondary.main, 0.18)})`,
+        color: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.primary.dark,
+        WebkitTextFillColor: theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.primary.dark,
+        border: `1px solid ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.45 : 0.28)}`,
+        verticalAlign: 'middle',
+        boxShadow: theme.palette.mode === 'dark'
+            ? `0 0 0 1px ${alpha(theme.palette.common.white, 0.08)}, 0 4px 16px ${alpha(theme.palette.primary.main, 0.26)}`
+            : `0 4px 14px ${alpha(theme.palette.primary.main, 0.16)}`,
+        display: 'inline-flex',
+        alignItems: 'center',
+        lineHeight: 1,
+        backdropFilter: 'blur(8px)',
+        textShadow: theme.palette.mode === 'dark' ? `0 1px 8px ${alpha(theme.palette.common.black, 0.45)}` : 'none',
+    }), [theme]);
+
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             <HideOnScroll>
@@ -82,25 +110,7 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                             >
                                 {title}
                                 {bookmarkCount !== undefined && bookmarkCount > 0 && (
-                                    <Box component="span" sx={{
-                                        ml: 1.5,
-                                        px: 1.2,
-                                        py: 0.4,
-                                        fontSize: '0.85rem',
-                                        borderRadius: '16px',
-                                        background: theme.palette.mode === 'dark' 
-                                            ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`
-                                            : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.4)}, ${alpha(theme.palette.secondary.light, 0.3)})`,
-                                        color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
-                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-                                        verticalAlign: 'text-bottom',
-                                        boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.15)}`,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        lineHeight: 1,
-                                        fontWeight: 700,
-                                        backdropFilter: 'blur(4px)'
-                                    }}>
+                                    <Box component="span" sx={bookmarkCountBadgeSx}>
                                         {bookmarkCount}
                                     </Box>
                                 )}
@@ -130,23 +140,7 @@ const ModernLayout: React.FC<Props> = ({ children, headerContent, title = "NavTo
                             >
                                 {title}
                                 {bookmarkCount !== undefined && bookmarkCount > 0 && (
-                                    <Box component="span" sx={{
-                                        ml: 1,
-                                        px: 1,
-                                        py: 0.3,
-                                        fontSize: '0.75rem',
-                                        borderRadius: '12px',
-                                        background: theme.palette.mode === 'dark' 
-                                            ? `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.2)}, ${alpha(theme.palette.secondary.main, 0.2)})`
-                                            : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.4)}, ${alpha(theme.palette.secondary.light, 0.3)})`,
-                                        color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.dark,
-                                        border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-                                        verticalAlign: 'text-bottom',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        lineHeight: 1,
-                                        fontWeight: 700
-                                    }}>
+                                    <Box component="span" sx={bookmarkCountBadgeSx}>
                                         {bookmarkCount}
                                     </Box>
                                 )}
