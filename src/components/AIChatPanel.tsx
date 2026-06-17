@@ -1134,7 +1134,6 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, isAdmin = fals
                         </Popover>
                     </Paper>
                 </Slide>
-            </Box>
             <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>AI 助手设置</DialogTitle>
                 <DialogContent>
@@ -1196,6 +1195,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, isAdmin = fals
                     <Button onClick={handleSaveSettings} variant="contained">保存配置</Button>
                 </DialogActions>
             </Dialog>
+            </Box>
         </ClickAwayListener>
     );
 };
