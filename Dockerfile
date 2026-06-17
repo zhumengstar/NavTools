@@ -7,13 +7,13 @@ WORKDIR /app
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y sqlite3 && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm using the fast mirror
-RUN npm install -g pnpm@9 --registry=https://registry.npmmirror.com
+# Install pnpm using Tencent mirror
+RUN npm install -g pnpm@9 --registry=https://mirrors.cloud.tencent.com/npm/
 
 COPY package.json ./
 
-# Install dependencies using the fast mirror
-RUN pnpm install --registry=https://registry.npmmirror.com 
+# Install dependencies using Tencent mirror
+RUN pnpm install --registry=https://mirrors.cloud.tencent.com/npm/
 
 COPY . .
 
