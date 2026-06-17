@@ -1793,6 +1793,34 @@ export class NavigationAPI {
     }
   }
 
+  async clickPublicSite(id: number): Promise<boolean> {
+    try {
+      await this.ensureClickCountColumn();
+
+      const now = new Date();
+      const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace('Z', '').split('.')[0];
+
+      const result = await this.db
+        .prepare(`
+          UPDATE sites
+          SET last_clicked_at = ?, click_count = COALESCE(click_count, 0) + 1
+          WHERE id = ?
+            AND is_public = 1
+            AND (is_deleted = 0 OR is_deleted IS NULL)
+            AND group_id IN (
+              SELECT id FROM groups WHERE is_public = 1 AND (is_deleted = 0 OR is_deleted IS NULL)
+            )
+        `)
+        .bind(beijingTime, id)
+        .run();
+
+      return result.success && (result.meta?.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('记录公开站点点击失败:', error);
+      return false;
+    }
+  }
+
   // Restore site
   async restoreSite(id: number): Promise<Site | null> {
     const result = await this.db

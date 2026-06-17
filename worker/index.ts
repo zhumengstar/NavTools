@@ -502,8 +502,10 @@ export default {
                             (route) => route.method === method && route.path === requestPath
                         );
 
-                        // 访客模式的随机推荐接口始终公开
-                        const isPublicRoute = path === "sites/random" && method === "GET";
+                        // 访客模式的随机推荐和公开站点点击统计接口始终公开
+                        const isPublicRoute =
+                            (path === "sites/random" && method === "GET") ||
+                            (path.startsWith("sites/") && path.endsWith("/click") && method === "POST");
 
                         const shouldRequireAuth = !isPublicRoute && (!isReadOnlyRoute || env.AUTH_REQUIRED_FOR_READ === 'true');
 
@@ -1120,7 +1122,9 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
-                        const result = await api.clickSite(id);
+                        const result = isAuthenticated
+                            ? await api.clickSite(id)
+                            : await api.clickPublicSite(id);
                         return createJsonResponse({ success: result }, request);
                     } else if (path.startsWith("sites/") && !path.endsWith("/permanent") && method === "DELETE") {
                         const idStr = path.split("/")[1];
