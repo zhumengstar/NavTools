@@ -278,6 +278,7 @@ export class NavigationAPI {
   private passwordHash: string; // 存储bcrypt哈希而非明文密码
   private secret: string;
   public currentUserId: number | null = null; // Changed to public so worker can set it
+  private static clickCountColumnReady = false;
 
   constructor(envOrUrl: Env | string) {
     if (typeof envOrUrl === 'string') {
@@ -298,6 +299,23 @@ export class NavigationAPI {
       this.username = env.AUTH_USERNAME || '';
       this.passwordHash = env.AUTH_PASSWORD || '';
       this.secret = env.AUTH_SECRET || 'your-secret-key';
+    }
+  }
+
+  private async ensureClickCountColumn(): Promise<void> {
+    if (NavigationAPI.clickCountColumnReady || !this.db) return;
+
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN click_count INTEGER DEFAULT 0");
+      console.log('Migrated: Added click_count column to sites table');
+      NavigationAPI.clickCountColumnReady = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/duplicate column|already exists/i.test(message)) {
+        NavigationAPI.clickCountColumnReady = true;
+        return;
+      }
+      console.warn('Click count migration skipped:', message);
     }
   }
 
@@ -1266,6 +1284,8 @@ export class NavigationAPI {
 
   // 网站相关 API
   async getSites(groupId?: number, userId?: number): Promise<Site[]> {
+    await this.ensureClickCountColumn();
+
     let query = `
       SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.account_username_encrypted, s.account_password_encrypted, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, COALESCE(s.click_count, 0) as click_count, s.created_at, s.updated_at 
       FROM sites s
@@ -1299,6 +1319,8 @@ export class NavigationAPI {
    */
   // 获取所有分组及其站点 (使用 JOIN 优化,避免 N+1 查询)
   async getGroupsWithSites(userId?: number, options?: { includeDeleted?: boolean }): Promise<GroupWithSites[]> {
+    await this.ensureClickCountColumn();
+
     // 使用 LEFT JOIN 一次性获取所有数据
     const includeDeleted = options?.includeDeleted ?? false;
     console.log('[NavigationAPI] getGroupsWithSites called with userId:', userId, 'includeDeleted:', includeDeleted);
@@ -1442,6 +1464,8 @@ export class NavigationAPI {
     groupName: string;
     ownerName: string;
   }[]> {
+    await this.ensureClickCountColumn();
+
     const safeLimit = Math.min(Math.max(Math.floor(Number(limit) || 20), 1), 50);
     const candidateLimit = Math.min(Math.max(safeLimit * 4, 50), 200);
     // 首先尝试获取推荐的站点
@@ -1609,6 +1633,8 @@ export class NavigationAPI {
   }
 
   async getSite(id: number): Promise<Site | null> {
+    await this.ensureClickCountColumn();
+
     const result = await this.db
       .prepare(
         'SELECT id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, COALESCE(click_count, 0) as click_count, created_at, updated_at FROM sites WHERE id = ?'
@@ -1619,6 +1645,8 @@ export class NavigationAPI {
   }
 
   async createSite(site: Site): Promise<Site> {
+    await this.ensureClickCountColumn();
+
     // 1. 规范化 URL（小写化域名部分，移除末尾斜杠）
     const trimmedUrl = site.url.trim();
     const normalizedUrl = trimmedUrl.replace(/\/+$/, '');
@@ -1672,6 +1700,8 @@ export class NavigationAPI {
   }
 
   async updateSite(id: number, site: Partial<Site>): Promise<Site | null> {
+    await this.ensureClickCountColumn();
+
     // 字段白名单
     const ALLOWED_FIELDS = [
       'group_id',
@@ -1746,6 +1776,8 @@ export class NavigationAPI {
 
   async clickSite(id: number): Promise<boolean> {
     try {
+      await this.ensureClickCountColumn();
+
       // 生成北京时间 (UTC+8)
       const now = new Date();
       const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace('Z', '').split('.')[0];
