@@ -38,8 +38,8 @@
         "better-sqlite3": "^11.8.1",
         "framer-motion": "^11.15.0",
         "markdown-it": "^14.1.0",
-        "react": "^19.0.0",
-        "react-dom": "^19.0.0",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
         "react-markdown": "^9.0.1"
     },
     "devDependencies": {
@@ -47,8 +47,8 @@
         "@types/bcrypt": "^5.0.2",
         "@types/bcryptjs": "^2.4.6",
         "@types/better-sqlite3": "^7.6.12",
-        "@types/react": "^19.0.2",
-        "@types/react-dom": "^19.0.2",
+        "@types/react": "18.3.31",
+        "@types/react-dom": "18.3.7",
         "@typescript-eslint/eslint-plugin": "^8.19.1",
         "@typescript-eslint/parser": "^8.19.1",
         "@vitejs/plugin-react": "^4.3.4",
