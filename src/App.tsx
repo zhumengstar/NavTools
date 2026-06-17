@@ -2620,7 +2620,9 @@ function App() {
           alignItems: 'center',
           bgcolor: 'background.default'
         }}>
-          {renderLoginForm()}
+          <Suspense fallback={<CircularProgress />}>
+            {renderLoginForm()}
+          </Suspense>
         </Box>
       ) : (
         <>
