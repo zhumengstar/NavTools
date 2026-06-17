@@ -511,6 +511,7 @@ export class MockNavigationClient extends NavigationClient {
         const now = new Date();
         const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().replace('Z', '');
         site.last_clicked_at = beijingTime;
+        site.click_count = (site.click_count || 0) + 1;
         saveSitesToStorage();
         return true;
       }

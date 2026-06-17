@@ -1,6 +1,5 @@
 // src/api/db.ts
 // 不使用外部JWT库，改为内置的crypto API
-import { Group, Site } from '../types/index';
 
 import bcrypt from 'bcryptjs';
 const { compareSync, hashSync } = bcrypt;
@@ -154,6 +153,7 @@ export interface Site {
   order_num: number;
   is_public?: number; // 0 = 私密（仅管理员可见），1 = 公开（访客可见）
   last_clicked_at?: string; // 上次点击时间
+  click_count?: number; // 点击次数
   created_at?: string;
   updated_at?: string;
   is_deleted?: number;
@@ -383,7 +383,7 @@ export class NavigationAPI {
 
     // 再创建sites表
     await this.db.exec(
-      `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, icon TEXT, description TEXT, notes TEXT, account_username_encrypted TEXT, account_password_encrypted TEXT, order_num INTEGER NOT NULL, is_public INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at TIMESTAMP, last_clicked_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE);`
+      `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, icon TEXT, description TEXT, notes TEXT, account_username_encrypted TEXT, account_password_encrypted TEXT, order_num INTEGER NOT NULL, is_public INTEGER DEFAULT 1, is_deleted INTEGER DEFAULT 0, deleted_at TIMESTAMP, last_clicked_at TIMESTAMP, click_count INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE);`
     );
 
     // 创建配置表
@@ -470,6 +470,13 @@ export class NavigationAPI {
     try {
       await this.db.exec("ALTER TABLE sites ADD COLUMN last_clicked_at TIMESTAMP");
       console.log('Migrated: Added last_clicked_at column to sites table');
+    } catch (e) {
+      // Field may already exist.
+    }
+
+    try {
+      await this.db.exec("ALTER TABLE sites ADD COLUMN click_count INTEGER DEFAULT 0");
+      console.log('Migrated: Added click_count column to sites table');
     } catch (e) {
       // Field may already exist.
     }
@@ -1260,7 +1267,7 @@ export class NavigationAPI {
   // 网站相关 API
   async getSites(groupId?: number, userId?: number): Promise<Site[]> {
     let query = `
-      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.account_username_encrypted, s.account_password_encrypted, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, s.created_at, s.updated_at 
+      SELECT s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes, s.account_username_encrypted, s.account_password_encrypted, s.order_num, s.is_public, s.is_featured, s.last_clicked_at, COALESCE(s.click_count, 0) as click_count, s.created_at, s.updated_at 
       FROM sites s
     `;
 
@@ -1339,6 +1346,7 @@ export class NavigationAPI {
         s.is_deleted as site_is_deleted,
         s.deleted_at as site_deleted_at,
         s.last_clicked_at as site_last_clicked_at,
+        COALESCE(s.click_count, 0) as site_click_count,
         s.created_at as site_created_at,
         s.updated_at as site_updated_at,
         s.is_featured as site_is_featured
@@ -1373,6 +1381,7 @@ export class NavigationAPI {
       site_deleted_at?: string;
       site_is_featured?: number;
       site_last_clicked_at: string | null;
+      site_click_count: number | null;
       site_created_at: string | null;
       site_updated_at: string | null;
     }>();
@@ -1417,6 +1426,7 @@ export class NavigationAPI {
           is_deleted: row.site_is_deleted,
           deleted_at: row.site_deleted_at,
           last_clicked_at: row.site_last_clicked_at || undefined,
+          click_count: row.site_click_count || 0,
           created_at: row.site_created_at!,
           updated_at: row.site_updated_at!,
         });
@@ -1447,6 +1457,7 @@ export class NavigationAPI {
         s.order_num as site_order,
         s.is_public as site_is_public,
         s.last_clicked_at as site_last_clicked_at,
+        COALESCE(s.click_count, 0) as site_click_count,
         s.created_at as site_created_at,
         s.updated_at as site_updated_at,
         g.name as group_name,
@@ -1472,6 +1483,7 @@ export class NavigationAPI {
       site_order: number;
       site_is_public: number;
       site_last_clicked_at: string | null;
+      site_click_count: number | null;
       site_created_at: string;
       site_updated_at: string;
       group_name: string;
@@ -1511,6 +1523,7 @@ export class NavigationAPI {
         s.order_num as site_order,
         s.is_public as site_is_public,
         s.last_clicked_at as site_last_clicked_at,
+        COALESCE(s.click_count, 0) as site_click_count,
         s.created_at as site_created_at,
         s.updated_at as site_updated_at,
         g.name as group_name,
@@ -1536,6 +1549,7 @@ export class NavigationAPI {
       site_order: number;
       site_is_public: number;
       site_last_clicked_at: string | null;
+      site_click_count: number | null;
       site_created_at: string;
       site_updated_at: string;
       group_name: string;
@@ -1567,6 +1581,7 @@ export class NavigationAPI {
     site_order: number;
     site_is_public: number;
     site_last_clicked_at: string | null;
+    site_click_count: number | null;
     site_created_at: string;
     site_updated_at: string;
     group_name: string;
@@ -1584,6 +1599,7 @@ export class NavigationAPI {
         order_num: row.site_order,
         is_public: row.site_is_public,
         last_clicked_at: row.site_last_clicked_at || undefined,
+        click_count: row.site_click_count || 0,
         created_at: row.site_created_at,
         updated_at: row.site_updated_at
       },
@@ -1595,7 +1611,7 @@ export class NavigationAPI {
   async getSite(id: number): Promise<Site | null> {
     const result = await this.db
       .prepare(
-        'SELECT id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at FROM sites WHERE id = ?'
+        'SELECT id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, COALESCE(click_count, 0) as click_count, created_at, updated_at FROM sites WHERE id = ?'
       )
       .bind(id)
       .first<Site>();
@@ -1628,7 +1644,7 @@ export class NavigationAPI {
         `
       INSERT INTO sites (group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      RETURNING id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, last_clicked_at, created_at, updated_at
+      RETURNING id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, last_clicked_at, click_count, created_at, updated_at
     `
       )
       .bind(
@@ -1693,7 +1709,7 @@ export class NavigationAPI {
     // 构建安全的参数化查询
     const query = `UPDATE sites SET ${updates.join(
       ', '
-    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, created_at, updated_at`;
+    )} WHERE id = ? RETURNING id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, click_count, created_at, updated_at`;
     params.push(id);
 
     const result = await this.db
@@ -1735,7 +1751,7 @@ export class NavigationAPI {
       const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace('Z', '').split('.')[0];
 
       const result = await this.db
-        .prepare('UPDATE sites SET last_clicked_at = ? WHERE id = ?')
+        .prepare('UPDATE sites SET last_clicked_at = ?, click_count = COALESCE(click_count, 0) + 1 WHERE id = ?')
         .bind(beijingTime, id)
         .run();
       return result.success;

@@ -21,7 +21,7 @@ export function log(data: LogData): void {
 
 export function createJsonResponse(
     data: any,
-    request?: Request | null,
+    _request?: Request | null,
     options: ResponseInit = {}
 ): Response {
     const headers = new Headers(options.headers || {});

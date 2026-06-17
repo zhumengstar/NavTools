@@ -137,6 +137,13 @@ const VisitorHome: React.FC<VisitorHomeProps> = ({ api, onLoginClick }) => {
         return `/${icon}`;
     };
 
+    const handleSiteClick = (siteId?: number) => {
+        if (!siteId) return;
+        api.clickSite(siteId).catch((err: unknown) => {
+            console.warn('记录点击失败:', err);
+        });
+    };
+
     const displaySites = isSearching ? filteredSites : sites;
 
     return (
@@ -242,6 +249,7 @@ const VisitorHome: React.FC<VisitorHomeProps> = ({ api, onLoginClick }) => {
                                 <Card
                                     elevation={2}
                                     sx={{
+                                        position: 'relative',
                                         height: '100%',
                                         display: 'flex',
                                         flexDirection: 'column',
@@ -253,13 +261,42 @@ const VisitorHome: React.FC<VisitorHomeProps> = ({ api, onLoginClick }) => {
                                         },
                                     }}
                                 >
+                                    <Box
+                                        aria-label={`点击次数 ${Math.max(0, Number(item.site.click_count ?? 0))}`}
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 7,
+                                            left: 7,
+                                            zIndex: 3,
+                                            minWidth: 20,
+                                            height: 20,
+                                            px: 0.75,
+                                            borderRadius: 999,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 800,
+                                            lineHeight: 1,
+                                            letterSpacing: '-0.02em',
+                                            color: theme.palette.mode === 'dark' ? '#fff' : theme.palette.primary.contrastText,
+                                            background: theme.palette.mode === 'dark'
+                                                ? 'rgba(37, 99, 235, 0.82)'
+                                                : 'rgba(25, 118, 210, 0.9)',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.22)',
+                                            pointerEvents: 'none',
+                                        }}
+                                    >
+                                        {Math.max(0, Number(item.site.click_count ?? 0))}
+                                    </Box>
                                     <CardActionArea
                                         href={item.site.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        onClick={() => handleSiteClick(item.site.id)}
                                         sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
                                     >
-                                        <CardContent sx={{ width: '100%', p: 2 }}>
+                                        <CardContent sx={{ width: '100%', p: 2, pt: 4 }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                                 {item.site.icon ? (
                                                     <Avatar

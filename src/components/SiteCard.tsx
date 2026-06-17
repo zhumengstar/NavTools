@@ -99,6 +99,7 @@ const SiteCard = memo(function SiteCard({
 
   // 如果没有图标，使用首字母作为图标
   const fallbackIcon = site.name.charAt(0).toUpperCase();
+  const clickCount = Math.max(0, Number(site.click_count ?? 0));
 
   // 处理设置按钮点击
   const handleSettingsClick = async (e: React.MouseEvent) => {
@@ -182,13 +183,41 @@ const SiteCard = memo(function SiteCard({
             : 'rgba(255, 255, 255, 0.1)', // Slight tint for card body
         }}
       >
+        <Box
+          aria-label={`点击次数 ${clickCount}`}
+          sx={{
+            position: 'absolute',
+            top: isBatchMode ? 36 : 7,
+            left: 7,
+            zIndex: 3,
+            minWidth: 20,
+            height: 20,
+            px: 0.75,
+            borderRadius: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.72rem',
+            fontWeight: 800,
+            lineHeight: 1,
+            letterSpacing: '-0.02em',
+            color: (theme) => theme.palette.mode === 'dark' ? '#fff' : theme.palette.primary.contrastText,
+            background: (theme) => theme.palette.mode === 'dark'
+              ? 'rgba(37, 99, 235, 0.82)'
+              : 'rgba(25, 118, 210, 0.9)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.22)',
+            pointerEvents: 'none',
+          }}
+        >
+          {clickCount}
+        </Box>
         {isEditMode ? (
           <CardActionArea
             onClick={handleCardClick}
             sx={{
               height: '100%',
               p: { xs: 1.5, sm: 2 },
-              pt: { xs: 2.5, sm: 3 }, // 为复选框留出顶部空间
+              pt: { xs: 3.25, sm: 3.75 }, // 为左上角数字留出顶部空间
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'stretch',
@@ -398,7 +427,7 @@ const SiteCard = memo(function SiteCard({
                     display: 'flex',
                     flexDirection: 'column',
                     p: { xs: 1.5, sm: 2 },
-                    pt: { xs: 2.5, sm: 3 }, // 为复选框留出顶部空间
+                    pt: { xs: 3.25, sm: 3.75 }, // 为左上角数字留出顶部空间
                     '&:last-child': { pb: { xs: 1.5, sm: 2 } },
                   }}
                 >

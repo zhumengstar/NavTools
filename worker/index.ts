@@ -1,6 +1,6 @@
 import { NavigationAPI, type LoginRequest, type RegisterRequest, type ResetPasswordRequest, type SendCodeRequest, type ExportData } from "../src/API/db";
 import { type Group, type Site } from "../src/types/index";
-import { generateErrorId, log, createJsonResponse, createErrorResponse, validateRequestBody } from "./utils/httpUtils";
+import { log, createJsonResponse, createErrorResponse, validateRequestBody } from "./utils/httpUtils";
 
 
 /**
@@ -473,7 +473,6 @@ export default {
                         // 在此处，我们需要确保请求已经通过了验证
                         // 但是因为这个 if 块在验证中间件之前，我们需要特殊处理
                         // 或者移动到验证中间件之后。
-                        // 鉴于目前逻辑，我将其移动到验证中间件之后更好的位置。
                     }
 
                     // 初始化数据库接口 - 不需要验证
@@ -865,7 +864,7 @@ export default {
 
                         const result = await api.updateGroup(id, data);
                         return createJsonResponse(result, request);
-                    } else if (path.startsWith("groups/") && method === "DELETE") {
+                    } else if (path.startsWith("groups/") && !path.endsWith("/permanent") && method === "DELETE") {
                         // DELETE /groups/:id 现在执行软删除
                         const idStr = path.split("/")[1];
                         if (!idStr) {
@@ -918,10 +917,6 @@ export default {
 
                         const result = await api.deleteGroupPermanently(id);
                         return createJsonResponse({ success: result }, request);
-                    } else if (path === "groups/trash" && method === "GET") {
-                        // GET /groups/trash 获取回收站分组
-                        const groups = await api.getTrashGroups(currentUserId);
-                        return createJsonResponse(groups, request);
                     }
                     // 站点相关API
                     else if (path === "sites" && method === "GET") {
@@ -1127,7 +1122,7 @@ export default {
 
                         const result = await api.clickSite(id);
                         return createJsonResponse({ success: result }, request);
-                    } else if (path.startsWith("sites/") && method === "DELETE") {
+                    } else if (path.startsWith("sites/") && !path.endsWith("/permanent") && method === "DELETE") {
                         const idStr = path.split("/")[1];
                         if (!idStr) {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
@@ -2233,8 +2228,9 @@ export default {
                                 
                                 // 优先尝试使用 SerpAPI (如果有配置)
                                 if (env.SERP_API_KEY) {
+                                    const searchEngine = env.PREFERRED_SEARCH_ENGINE === 'baidu' ? 'baidu' : 'google';
                                     const serpResponse = await fetch(
-                                        `https://serpapi.com/search?q=${searchQuery}&engine=google&api_key=${env.SERP_API_KEY}&num=5`,
+                                        `https://serpapi.com/search?q=${searchQuery}&engine=${searchEngine}&api_key=${env.SERP_API_KEY}&num=5`,
                                         { method: 'GET' }
                                     );
                                     if (serpResponse.ok) {
@@ -2257,22 +2253,6 @@ export default {
                                         const googleData = await googleResponse.json() as any;
                                         if (googleData.items) {
                                             searchResults = googleData.items
-                                                .slice(0, 5)
-                                                .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
-                                                .join('\n\n');
-                                        }
-                                    }
-                                }
-                                // 备用：使用 SerpAPI 百度搜索（支持中文搜索更友好）
-                                else if (env.SERP_API_KEY && env.PREFERRED_SEARCH_ENGINE === 'baidu') {
-                                    const baiduResponse = await fetch(
-                                        `https://serpapi.com/search?q=${searchQuery}&engine=baidu&api_key=${env.SERP_API_KEY}&num=5`,
-                                        { method: 'GET' }
-                                    );
-                                    if (baiduResponse.ok) {
-                                        const baiduData = await baiduResponse.json() as any;
-                                        if (baiduData.organic_results) {
-                                            searchResults = baiduData.organic_results
                                                 .slice(0, 5)
                                                 .map((r: any, i: number) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`)
                                                 .join('\n\n');
