@@ -7,9 +7,11 @@ services:
       - "8787:8787"
     environment:
       - USE_REMOTE_DB=false
+      - USE_D1_HTTP=false
       - NODE_ENV=production
     volumes:
       - navtools-data:/app/.wrangler/state/v3/d1
+      - ./.dev.vars.empty:/app/.dev.vars
     restart: unless-stopped
 
 volumes:
