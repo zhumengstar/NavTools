@@ -3756,6 +3756,7 @@ function App() {
                   <AIChatPanel
                     api={api}
                     username={username}
+                    isAdmin={isAdmin}
                     avatarUrl={avatarUrl}
                     defaultModel={configs['ai.defaultModel']}
                     groups={groups}

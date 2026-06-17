@@ -17,6 +17,14 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Select,
+    FormControl,
+    InputLabel,
 } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -35,6 +43,7 @@ import {
     Bolt as BoltIcon,
     Stars as StarsIcon,
     ManageSearch as ManageSearchIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 
 const DEFAULT_MESSAGES: ChatMessage[] = [
@@ -112,13 +121,14 @@ interface AIChatPanelProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     api: any;
     username: string;
+    isAdmin?: boolean;
     avatarUrl?: string | null;
     defaultModel?: string;
     groups: any[];
     onAddSite: (site: any) => Promise<boolean>;
 }
 
-const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, defaultModel, groups, onAddSite }) => {
+const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, isAdmin = false, avatarUrl, defaultModel, groups, onAddSite }) => {
     const theme = useTheme();
     const [open, setOpen] = useState(false);
 
@@ -145,6 +155,65 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, def
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
     const [fetchingModels, setFetchingModels] = useState(false);
     const [modelMenuAnchor, setModelMenuAnchor] = useState<null | HTMLElement>(null);
+
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [aiBaseUrl, setAiBaseUrl] = useState('');
+    const [aiApiKey, setAiApiKey] = useState('');
+
+    useEffect(() => {
+        if (settingsOpen) {
+            api.getConfigs().then((configs: any) => {
+                if (configs) {
+                    setAiBaseUrl(configs['ai.baseUrl'] || '');
+                    setAiApiKey(configs['ai.apiKey'] || '');
+                }
+            }).catch(console.error);
+        }
+    }, [settingsOpen, api]);
+
+    const handleFetchModels = async () => {
+        if (!aiBaseUrl || !aiApiKey) return;
+        setFetchingModels(true);
+        try {
+            let url = aiBaseUrl.replace(/\/$/, '');
+            if (!url.endsWith('/v1') && !url.includes('/v1/')) {
+                url = `${url}/v1`;
+            }
+            const res = await fetch(`${url}/models`, {
+                headers: { 'Authorization': `Bearer ${aiApiKey}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.data && Array.isArray(data.data)) {
+                    setAvailableModels(data.data.map((m: any) => ({ id: m.id, capabilities: { function_calling: false, vision: false } })));
+                } else {
+                    alert('获取模型列表格式不正确');
+                }
+            } else {
+                alert('获取模型失败: ' + res.statusText);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('获取模型失败，请检查URL和API Key');
+        } finally {
+            setFetchingModels(false);
+        }
+    };
+
+    const handleSaveSettings = async () => {
+        try {
+            await api.setConfig('ai.baseUrl', aiBaseUrl);
+            await api.setConfig('ai.apiKey', aiApiKey);
+            if (selectedModel) {
+                await api.setConfig('ai.defaultModel', selectedModel);
+            }
+            setSettingsOpen(false);
+        } catch (e) {
+            console.error(e);
+            alert('保存配置失败');
+        }
+    };
+
 
     // Helper to sort models by provider
     const sortModels = (models: Model[]) => {
@@ -555,6 +624,19 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, def
                                 >
                                     <DeleteIcon fontSize="small" />
                                 </IconButton>
+                                {isAdmin && (
+                                    <IconButton
+                                        size="small"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            setSettingsOpen(true);
+                                        }}
+                                        title="AI 设置"
+                                        sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' }, mr: 0.5 }}
+                                    >
+                                        <SettingsIcon fontSize="small" />
+                                    </IconButton>
+                                )}
                                 <IconButton
                                     size="small"
                                     onClick={() => setOpen(false)}
@@ -1053,6 +1135,67 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ api, username, avatarUrl, def
                     </Paper>
                 </Slide>
             </Box>
+            <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>AI 助手设置</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <TextField
+                            label="API Base URL"
+                            value={aiBaseUrl}
+                            onChange={(event) => setAiBaseUrl(event.target.value)}
+                            fullWidth
+                            size="small"
+                            placeholder="例如：https://api.openai.com/v1"
+                        />
+                        <TextField
+                            label="API Key"
+                            value={aiApiKey}
+                            onChange={(event) => setAiApiKey(event.target.value)}
+                            fullWidth
+                            size="small"
+                            type="password"
+                        />
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                                variant="outlined"
+                                onClick={handleFetchModels}
+                                disabled={fetchingModels || !aiBaseUrl || !aiApiKey}
+                            >
+                                {fetchingModels ? '拉取中...' : '拉取可用模型'}
+                            </Button>
+                        </Box>
+                        {availableModels.length > 0 ? (
+                            <FormControl fullWidth size="small">
+                                <InputLabel>选择可用模型</InputLabel>
+                                <Select
+                                    value={selectedModel}
+                                    onChange={(event) => setSelectedModel(event.target.value as string)}
+                                    label="选择可用模型"
+                                >
+                                    {availableModels.map((model) => (
+                                        <MenuItem key={model.id} value={model.id}>
+                                            {model.id}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        ) : (
+                            <TextField
+                                label="当前模型"
+                                value={selectedModel}
+                                onChange={(event) => setSelectedModel(event.target.value)}
+                                fullWidth
+                                size="small"
+                                helperText="可手动输入，或填写 URL 和 API Key 后拉取模型列表"
+                            />
+                        )}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSettingsOpen(false)}>取消</Button>
+                    <Button onClick={handleSaveSettings} variant="contained">保存配置</Button>
+                </DialogActions>
+            </Dialog>
         </ClickAwayListener>
     );
 };
