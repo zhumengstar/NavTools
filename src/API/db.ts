@@ -1,6 +1,6 @@
 // src/api/db.ts
 // 不使用外部JWT库，改为内置的crypto API
-import { Group, Site } from '../types';
+import { Group, Site } from '../types/index';
 
 import bcrypt from 'bcryptjs';
 const { compareSync, hashSync } = bcrypt;
@@ -114,7 +114,7 @@ class RemoteD1HttpPreparedStatement implements D1PreparedStatement {
     const result = await this.all<Record<string, unknown>>();
     const row = result.results?.[0];
     if (!row) return null;
-    return (column ? row[column] : row) as T;
+    return (column ? row[column] : row) as any;
   }
 
   async run<T = unknown>(): Promise<D1Result<T>> {

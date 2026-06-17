@@ -1,5 +1,5 @@
 import { NavigationAPI, type LoginRequest, type RegisterRequest, type ResetPasswordRequest, type SendCodeRequest, type ExportData } from "../src/API/db";
-import { type Group, type Site } from "../src/types";
+import { type Group, type Site } from "../src/types/index";
 import { generateErrorId, log, createJsonResponse, createErrorResponse, validateRequestBody } from "./utils/httpUtils";
 
 
@@ -163,24 +163,7 @@ function getCorsHeaders(request: Request): Record<string, string> {
 /**
  * 创建带 CORS 头的 JSON 响应
  */
-function createJsonResponse(
-    data: unknown,
-    request: Request,
-    options: ResponseInit = {}
-): Response {
-    const corsHeaders = getCorsHeaders(request);
-    const headers = new Headers(options.headers);
 
-    // 合并 CORS 头
-    for (const [key, value] of Object.entries(corsHeaders)) {
-        headers.set(key, value);
-    }
-
-    return Response.json(data, {
-        ...options,
-        headers
-    });
-}
 
 /**
  * 创建带 CORS 头的普通响应

@@ -1,4 +1,4 @@
-import { Group, Site } from './API/http';
+import { Group, Site } from './API/db';
 
 // 确保GroupWithSites的id字段必定存在
 export interface GroupWithSites extends Omit<Group, 'id'> {

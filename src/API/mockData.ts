@@ -2,7 +2,7 @@
 // 生成时间: 2026-02-05
 // 数据来源: 分类后的书签数据
 
-import { Group, Site } from './http';
+import { Group, Site } from './db';
 
 export const mockGroups: Group[] = [
   {

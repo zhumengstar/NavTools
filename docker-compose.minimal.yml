@@ -1,0 +1,16 @@
+﻿version: '3.8'
+
+services:
+  navtools:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      - USE_REMOTE_DB=false
+      - NODE_ENV=production
+    volumes:
+      - navtools-data:/app/.wrangler/state/v3/d1
+    restart: unless-stopped
+
+volumes:
+  navtools-data:

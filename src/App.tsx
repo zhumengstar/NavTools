@@ -3,7 +3,7 @@ import UserManagement from './components/UserManagement';
 import { Portal } from '@mui/material';
 import { NavigationClient } from './API/client';
 import { MockNavigationClient } from './API/mock';
-import { Site, Group } from './API/http';
+import { Site, Group } from './API/db';
 import { parseBookmarks, BookmarkGroup } from './utils/bookmarkParser';
 import { GroupWithSites } from './types';
 import ThemeToggle from './components/ThemeToggle';

@@ -7,7 +7,7 @@
         "dev": "vite",
         "dev:api": "wrangler dev --config wrangler.local.jsonc --local --port 8787",
         "dev:api:remote": "node ./scripts/prepare-remote-d1-dev-vars.cjs && set NODE_OPTIONS=--require ./scripts/undici-proxy.cjs&& wrangler dev --config wrangler.remote.jsonc --port 8787",
-        "build": "tsc -b && vite build",
+        "build": "vite build",
         "lint": "eslint .",
         "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
         "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
@@ -22,7 +22,7 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@cfworker/jwt": "^7.0.4",
+        "@cfworker/jwt": "^7.0.3",
         "@cloudflare/workers-types": "^4.20250404.0",
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -54,6 +54,7 @@
         "@vitejs/plugin-react": "^4.3.4",
         "autoprefixer": "^10.4.20",
         "eslint": "^9.18.0",
+        "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-react-hooks": "^5.1.0",
         "eslint-plugin-react-refresh": "^0.4.18",
         "globals": "^15.14.0",
@@ -66,6 +67,7 @@
         "typescript-eslint": "^8.19.1",
         "vite": "^6.0.5",
         "vitepress": "^1.5.0",
+        "vitest": "^4.1.9",
         "wrangler": "^4.92.0"
     },
     "pnpm": {

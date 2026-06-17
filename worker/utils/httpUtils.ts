@@ -21,7 +21,7 @@ export function log(data: LogData): void {
 
 export function createJsonResponse(
     data: any,
-    request?: Request,
+    request?: Request | null,
     options: ResponseInit = {}
 ): Response {
     const headers = new Headers(options.headers || {});
@@ -67,7 +67,7 @@ export function createErrorResponse(
     );
 }
 
-const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+export const MAX_BODY_SIZE = 1024 * 1024; // 1MB
 
 export async function validateRequestBody(request: Request): Promise<unknown> {
     const contentLength = request.headers.get('Content-Length');
