@@ -24,6 +24,30 @@ const READ_ONLY_ROUTES = [
 // 记录数据库初始化状态的倾向性尝试（不存储 Promise，避免跨请求 I/O 污染）
 let hasAttemptedInit = false;
 
+function stripSiteCredentialFields<T extends Record<string, any>>(site: T): Omit<T, 'account_username_encrypted' | 'account_password_encrypted'> {
+    const { account_username_encrypted, account_password_encrypted, ...rest } = site;
+    return rest;
+}
+
+function stripGroupsSiteCredentialFields<T extends Record<string, any>>(groups: T[], includeCredentials: boolean): T[] {
+    if (includeCredentials) return groups;
+
+    return groups.map(group => ({
+        ...group,
+        sites: Array.isArray(group.sites)
+            ? group.sites.map((site: Record<string, any>) => stripSiteCredentialFields(site))
+            : group.sites,
+    }));
+}
+
+function authRequiredResponse(request: Request) {
+    return createJsonResponse({ success: false, message: "请先登录" }, request, { status: 401 });
+}
+
+function ownerForbiddenResponse(request: Request) {
+    return createJsonResponse({ success: false, message: "只能操作自己的书签卡片" }, request, { status: 403 });
+}
+
 /**
  * 生成唯一错误 ID
  */
@@ -693,7 +717,7 @@ export default {
                                     ...group,
                                     sites: group.sites.filter(site => site.is_public === 1)
                                 }));
-                            return createJsonResponse(filteredGroups, request);
+                            return createJsonResponse(stripGroupsSiteCredentialFields(filteredGroups, false), request);
                         }
 
                         // 如果未认证但提供了userId参数，拒绝访问
@@ -737,10 +761,8 @@ export default {
                             });
                         }
 
-                        // 根据认证状态过滤数据（已认证用户可以看到所有数据，因为targetUserId已指定）
-                        // 注意：这里假设已认证用户有权限查看targetUserId的数据
-                        // 实际生产环境应添加权限检查（例如管理员或自己）
-                        return createJsonResponse(groupsWithSites, request);
+                        const includeCredentials = targetUserId === currentUserId;
+                        return createJsonResponse(stripGroupsSiteCredentialFields(groupsWithSites, includeCredentials), request);
                     }
                     // GET /api/sites/random 随机获取站点（访客模式）
                     else if (path === "sites/random" && method === "GET") {
@@ -924,7 +946,7 @@ export default {
                     else if (path === "sites" && method === "GET") {
                         // 根据认证状态过滤查询
                         let query = `
-                        SELECT s.*
+                        SELECT s.*, g.user_id
                         FROM sites s
                         INNER JOIN groups g ON s.group_id = g.id
                     `;
@@ -956,7 +978,12 @@ export default {
                         query += ' ORDER BY s.group_id ASC, s.order_num ASC';
 
                         const result = await env.DB.prepare(query).bind(...params).all();
-                        return createJsonResponse(result.results || [], request);
+                        const sites = (result.results || []).map((site: Record<string, any>) =>
+                            isAuthenticated && Number(site.user_id) === currentUserId
+                                ? site
+                                : stripSiteCredentialFields(site)
+                        );
+                        return createJsonResponse(sites, request);
                     } else if (path === "auth/login" && method === "POST") {
                         const data = (await validateRequestBody(request)) as LoginRequest;
                         const result = await api.login(data);
@@ -1031,8 +1058,17 @@ export default {
                         }
 
                         const site = await api.getSite(id);
-                        return createJsonResponse(site, request);
+                        const responseSite = site && isAuthenticated && Number(site.user_id) === currentUserId
+                            ? site
+                            : site
+                                ? stripSiteCredentialFields(site as unknown as Record<string, any>)
+                                : site;
+                        return createJsonResponse(responseSite, request);
                     } else if (path === "sites" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
+
                         const data = (await validateRequestBody(request)) as SiteInput;
 
                         // 验证站点数据
@@ -1048,9 +1084,19 @@ export default {
                             );
                         }
 
-                        const result = await api.createSite(validation.sanitizedData as Site);
+                        const sanitizedSite = validation.sanitizedData as Site;
+                        const groupOwnerId = await api.getGroupOwnerId(sanitizedSite.group_id);
+                        if (groupOwnerId !== currentUserId) {
+                            return ownerForbiddenResponse(request);
+                        }
+
+                        const result = await api.createSite(sanitizedSite);
                         return createJsonResponse(result, request);
                     } else if (path.startsWith("sites/") && method === "PUT" && path !== "sites/batch") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
+
                         const idStr = path.split("/")[1];
                         if (!idStr) {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
@@ -1061,6 +1107,20 @@ export default {
                         }
 
                         const data = (await validateRequestBody(request)) as Partial<Site>;
+                        const siteOwnerId = await api.getSiteOwnerId(id);
+                        if (siteOwnerId === null) {
+                            return createJsonResponse({ error: "站点不存在" }, request, { status: 404 });
+                        }
+                        if (siteOwnerId !== currentUserId) {
+                            return ownerForbiddenResponse(request);
+                        }
+
+                        if (data.group_id !== undefined) {
+                            const targetGroupOwnerId = await api.getGroupOwnerId(data.group_id);
+                            if (targetGroupOwnerId !== currentUserId) {
+                                return ownerForbiddenResponse(request);
+                            }
+                        }
 
                         // 验证更新的站点数据
                         if (data.url !== undefined) {
@@ -1136,6 +1196,17 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
+                        const siteOwnerId = await api.getSiteOwnerId(id);
+                        if (siteOwnerId === null) {
+                            return createJsonResponse({ error: "站点不存在" }, request, { status: 404 });
+                        }
+                        if (siteOwnerId !== currentUserId) {
+                            return ownerForbiddenResponse(request);
+                        }
+
                         const result = await api.softDeleteSite(id);
                         return createJsonResponse({ success: result }, request);
 
@@ -1152,6 +1223,17 @@ export default {
                         const id = parseInt(idStr);
                         if (isNaN(id)) {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
+                        }
+
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
+                        const siteOwnerId = await api.getSiteOwnerId(id);
+                        if (siteOwnerId === null) {
+                            return createJsonResponse({ error: "站点不存在" }, request, { status: 404 });
+                        }
+                        if (siteOwnerId !== currentUserId) {
+                            return ownerForbiddenResponse(request);
                         }
 
                         const result = await api.restoreSite(id);
@@ -1175,29 +1257,58 @@ export default {
                             return createJsonResponse({ error: "无效的ID" }, request, { status: 400 });
                         }
 
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
+                        const siteOwnerId = await api.getSiteOwnerId(id);
+                        if (siteOwnerId === null) {
+                            return createJsonResponse({ error: "站点不存在" }, request, { status: 404 });
+                        }
+                        if (siteOwnerId !== currentUserId) {
+                            return ownerForbiddenResponse(request);
+                        }
+
                         const result = await api.deleteSite(id);
                         return createJsonResponse({ success: result }, request);
                     }
                     else if (path === "sites/batch-delete" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
                         const data = (await validateRequestBody(request)) as { ids: number[] };
                         if (!data.ids || !Array.isArray(data.ids)) {
                             return createJsonResponse({ success: false, message: "无效的 ID 列表" }, request, { status: 400 });
+                        }
+                        if (!(await api.areSitesOwnedByUser(data.ids, currentUserId))) {
+                            return ownerForbiddenResponse(request);
                         }
                         const result = await api.deleteSites(data.ids);
                         return createJsonResponse({ success: result }, request);
                     }
                     else if (path === "sites/batch-restore" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
                         const data = (await validateRequestBody(request)) as { ids: number[] };
                         if (!data.ids || !Array.isArray(data.ids)) {
                             return createJsonResponse({ success: false, message: "无效的 ID 列表" }, request, { status: 400 });
+                        }
+                        if (!(await api.areSitesOwnedByUser(data.ids, currentUserId))) {
+                            return ownerForbiddenResponse(request);
                         }
                         const result = await api.restoreSites(data.ids);
                         return createJsonResponse({ success: result }, request);
                     }
                     else if (path === "sites/batch-delete-permanent" && method === "POST") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
                         const data = (await validateRequestBody(request)) as { ids: number[] };
                         if (!data.ids || !Array.isArray(data.ids)) {
                             return createJsonResponse({ success: false, message: "无效的 ID 列表" }, request, { status: 400 });
+                        }
+                        if (!(await api.areSitesOwnedByUser(data.ids, currentUserId))) {
+                            return ownerForbiddenResponse(request);
                         }
                         const result = await api.deleteSitesPermanently(data.ids);
                         return createJsonResponse({ success: result }, request);
@@ -1239,6 +1350,9 @@ export default {
                         const result = await api.updateGroupOrder(data);
                         return createJsonResponse({ success: result }, request);
                     } else if (path === "site-orders" && method === "PUT") {
+                        if (!isAuthenticated || !currentUserId) {
+                            return authRequiredResponse(request);
+                        }
                         const data = (await validateRequestBody(request)) as Array<{ id: number; order_num: number }>;
 
                         // 验证排序数据
@@ -1269,6 +1383,10 @@ export default {
                                     { status: 400 }
                                 );
                             }
+                        }
+
+                        if (!(await api.areSitesOwnedByUser(data.map(item => item.id), currentUserId))) {
+                            return ownerForbiddenResponse(request);
                         }
 
                         const result = await api.updateSiteOrder(data);
@@ -1707,6 +1825,10 @@ export default {
                                 return createJsonResponse({ success: false, message: "参数 siteIds 必须是包含站点ID的数组" }, request, { status: 400 });
                             }
 
+                            if (!(await api.areSitesOwnedByUser(siteIds, currentUserId))) {
+                                return ownerForbiddenResponse(request);
+                            }
+
                             const results = await Promise.all(siteIds.map(async (siteId) => {
                                 try {
                                     const site = await api.getSiteById(siteId);
@@ -1787,6 +1909,15 @@ export default {
                             const data = payload as { ids: number[], data: Partial<Site> };
                             if (!data.ids || !Array.isArray(data.ids)) {
                                 return createJsonResponse({ success: false, message: "参数 ids 必须是数组" }, request, { status: 400 });
+                            }
+                            if (!(await api.areSitesOwnedByUser(data.ids, currentUserId))) {
+                                return ownerForbiddenResponse(request);
+                            }
+                            if (data.data.group_id !== undefined) {
+                                const targetGroupOwnerId = await api.getGroupOwnerId(data.data.group_id);
+                                if (targetGroupOwnerId !== currentUserId) {
+                                    return ownerForbiddenResponse(request);
+                                }
                             }
                             // 强制逻辑：精选内容必须是公开的
                             if (data.data.is_featured === 1) {

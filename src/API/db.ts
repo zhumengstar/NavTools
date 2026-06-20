@@ -1637,11 +1637,62 @@ export class NavigationAPI {
 
     const result = await this.db
       .prepare(
-        'SELECT id, group_id, name, url, icon, description, notes, account_username_encrypted, account_password_encrypted, order_num, is_public, is_featured, last_clicked_at, COALESCE(click_count, 0) as click_count, created_at, updated_at FROM sites WHERE id = ?'
+        `
+        SELECT
+          s.id, s.group_id, s.name, s.url, s.icon, s.description, s.notes,
+          s.account_username_encrypted, s.account_password_encrypted,
+          s.order_num, s.is_public, s.is_featured, s.last_clicked_at,
+          COALESCE(s.click_count, 0) as click_count,
+          s.created_at, s.updated_at, g.user_id
+        FROM sites s
+        INNER JOIN groups g ON s.group_id = g.id
+        WHERE s.id = ?
+        `
       )
       .bind(id)
       .first<Site>();
     return result;
+  }
+
+  async getGroupOwnerId(groupId: number): Promise<number | null> {
+    const result = await this.db
+      .prepare('SELECT user_id FROM groups WHERE id = ?')
+      .bind(groupId)
+      .first<{ user_id: number | null }>();
+
+    return result?.user_id ?? null;
+  }
+
+  async getSiteOwnerId(siteId: number): Promise<number | null> {
+    const result = await this.db
+      .prepare(`
+        SELECT g.user_id
+        FROM sites s
+        INNER JOIN groups g ON s.group_id = g.id
+        WHERE s.id = ?
+      `)
+      .bind(siteId)
+      .first<{ user_id: number | null }>();
+
+    return result?.user_id ?? null;
+  }
+
+  async areSitesOwnedByUser(siteIds: number[], userId: number): Promise<boolean> {
+    const uniqueIds = Array.from(new Set(siteIds));
+    if (uniqueIds.length === 0) return true;
+
+    const placeholders = uniqueIds.map(() => '?').join(',');
+    const result = await this.db
+      .prepare(`
+        SELECT COUNT(DISTINCT s.id) as count
+        FROM sites s
+        INNER JOIN groups g ON s.group_id = g.id
+        WHERE s.id IN (${placeholders}) AND g.user_id = ?
+      `)
+      .bind(...uniqueIds, userId)
+      .first<{ count: number }>();
+
+    return Number(result?.count ?? 0) === uniqueIds.length;
   }
 
   async createSite(site: Site): Promise<Site> {
