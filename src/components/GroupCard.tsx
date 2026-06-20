@@ -318,11 +318,16 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
     }
   };
 
+  const canManageGroupSites =
+    viewMode === 'edit' && currentUserId !== undefined && Number(group.user_id) === currentUserId;
+
   // 判断是否为当前正在编辑的分组（站点排序模式或编辑模式）
   // CrossGroupDrag 模式下所有分组都可拖拽
-  const isCurrentEditingGroup = sortMode === 'CrossGroupDrag' ||
+  const isCurrentEditingGroup = canManageGroupSites && (
+    sortMode === 'CrossGroupDrag' ||
     (sortMode === 'SiteSort' && currentSortingGroupId === group.id) ||
-    (sortMode === 'None' && viewMode === 'edit' && !isBatchMode);
+    (sortMode === 'None' && !isBatchMode)
+  );
 
   // 判断是否有站点正在拖拽到此分组
   const isDraggingOverThisGroup: boolean =
@@ -425,6 +430,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
                       isBatchMode={isBatchMode}
                       isSelected={selectedSiteIds.has(site.id as number)}
                       onToggleSelection={handleToggleSelection}
+                      canManageSettings={canManageGroupSites}
                     />
                   </Box>
                 ))}
@@ -472,6 +478,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
               isBatchMode={isBatchMode}
               isSelected={selectedSiteIds.has(site.id as number)}
               onToggleSelection={handleToggleSelection}
+              canManageSettings={canManageGroupSites}
             />
           </Box>
         ))}
@@ -589,7 +596,7 @@ const GroupCard: React.FC<GroupCardProps> = React.memo(({
             </Typography>
           ) : (
             (sortMode === 'None' || sortMode === 'CrossGroupDrag') &&
-            viewMode === 'edit' && ( // 只在编辑模式显示按钮
+            canManageGroupSites && ( // 只允许本人分组显示编辑按钮
               <>
                 {/* 批量操作控制 */}
                 {isBatchMode ? (

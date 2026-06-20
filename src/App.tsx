@@ -2533,11 +2533,20 @@ function App() {
 
   // 打开站点设置时刷新数据
   const handleSiteSettingsOpen = (siteId: number) => {
-    const site = groups.flatMap(g => g.sites).find(s => s.id === siteId);
-    if (site) {
-      setSiteToSettings(site);
-      setIsSettingsOpen(true);
+    const owningGroup = groups.find(group => group.sites.some(site => site.id === siteId));
+    const site = owningGroup?.sites.find(s => s.id === siteId);
+
+    if (!owningGroup || !site) {
+      return;
     }
+
+    if (!currentUserId || Number(owningGroup.user_id) !== currentUserId) {
+      handleError('只能设置自己书签卡片的账号密码');
+      return;
+    }
+
+    setSiteToSettings(site);
+    setIsSettingsOpen(true);
   };
 
   // 批量更新精选状态

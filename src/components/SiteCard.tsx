@@ -30,6 +30,7 @@ interface SiteCardProps {
   isSelected?: boolean; // 新增：是否被选中
   onToggleSelection?: (id: number) => void; // 新增：切换选中回调
   onSettingsOpen?: (siteId: number) => Promise<void> | void; // 新增：打开设置时的回调
+  canManageSettings?: boolean; // 仅卡片所属用户可打开设置
 }
 
 // 使用memo包装组件以减少不必要的重渲染
@@ -45,6 +46,7 @@ const SiteCard = memo(function SiteCard({
   isSelected = false,
   onToggleSelection,
   onSettingsOpen,
+  canManageSettings = false,
 }: SiteCardProps) {
   const [iconError, setIconError] = useState(!site.icon);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -105,7 +107,7 @@ const SiteCard = memo(function SiteCard({
   const handleSettingsClick = async (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止卡片点击事件
     e.preventDefault(); // 防止默认行为
-    if (onSettingsOpen && site.id) {
+    if (canManageSettings && onSettingsOpen && site.id) {
       onSettingsOpen(site.id);
     }
   };
@@ -249,6 +251,7 @@ const SiteCard = memo(function SiteCard({
                 }}
               />
             )}
+            {canManageSettings && (
             <Box position='absolute' top={8} right={8} display='flex' gap={1} zIndex={10}>
               <IconButton
                 size='small'
@@ -272,6 +275,7 @@ const SiteCard = memo(function SiteCard({
                 <SettingsIcon fontSize='small' />
               </IconButton>
             </Box>
+            )}
             {/* 图标和名称 */}
             <Box display='flex' alignItems='center' mb={1}>
               {!iconError && site.icon ? (
@@ -554,7 +558,7 @@ const SiteCard = memo(function SiteCard({
             </Box>
 
             {/* 设置按钮 - 只在编辑模式显示 (移出 CardActionArea 以修复 DOM 嵌套错误) */}
-            {viewMode === 'edit' && (
+            {viewMode === 'edit' && canManageSettings && (
               <IconButton
                 size='small'
                 className="site-settings-btn"
